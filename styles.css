@@ -29,6 +29,14 @@ body {
   background: radial-gradient(circle at top, #1e3a8a, #0f172a 55%);
 }
 
+.menu-body[data-has-background="true"] {
+  background-image: var(--menu-background-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0f172a;
+}
+
 .menu-board {
   width: min(1100px, 100%);
   background: var(--card);
@@ -222,6 +230,115 @@ button.ghost {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.background-manager {
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.background-manager header h2 {
+  margin: 0.25rem 0;
+}
+
+.background-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.background-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.background-upload__hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.background-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.background-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.background-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+}
+
+.background-card__preview {
+  border-radius: 14px;
+  padding-top: 56%;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--border);
+}
+
+.background-card__body {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.background-card__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.background-card__meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.background-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-end;
+}
+
+.background-card__actions button {
+  width: 100%;
+}
+
+.background-card__badge {
+  background: var(--accent);
+  color: white;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.background-empty {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  background: #f8fafc;
 }
 
 .section-editor {

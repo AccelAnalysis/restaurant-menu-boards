@@ -33,12 +33,69 @@
     };
   }
 
+  function normalizeBackground(background = {}, index = 0) {
+    if (typeof background !== "object" || background === null) {
+      return null;
+    }
+
+    const source =
+      typeof background.source === "string" && background.source.trim()
+        ? background.source.trim()
+        : "";
+
+    if (!source) {
+      return null;
+    }
+
+    const name =
+      typeof background.name === "string" && background.name.trim()
+        ? background.name.trim()
+        : `Background ${index + 1}`;
+
+    const id =
+      typeof background.id === "string" && background.id.trim()
+        ? background.id.trim()
+        : `bg-${index + 1}`;
+
+    return {
+      id,
+      name,
+      source,
+      origin: background.origin === "upload" ? "upload" : "url"
+    };
+  }
+
   function normalizeMenu(menu = {}) {
     const source = typeof menu === "object" && menu !== null ? menu : {};
     const fallback =
       typeof window.DEFAULT_MENU === "object" && window.DEFAULT_MENU
         ? window.DEFAULT_MENU
         : { title: "Menu", sections: [] };
+
+    const normalizedFallbackBackgrounds = Array.isArray(fallback.backgrounds)
+      ? fallback.backgrounds.map(normalizeBackground).filter(Boolean)
+      : [];
+
+    const normalizedSourceBackgrounds = Array.isArray(source.backgrounds)
+      ? source.backgrounds.map(normalizeBackground).filter(Boolean)
+      : [];
+
+    const backgrounds = normalizedSourceBackgrounds.length
+      ? normalizedSourceBackgrounds
+      : normalizedFallbackBackgrounds;
+
+    const fallbackActiveBackgroundId = normalizedFallbackBackgrounds.find(
+      (background) => background.id === fallback.activeBackgroundId
+    )
+      ? fallback.activeBackgroundId
+      : normalizedFallbackBackgrounds[0]?.id || "";
+
+    const selectedBackgroundId =
+      typeof source.activeBackgroundId === "string" ? source.activeBackgroundId : "";
+
+    const activeBackgroundId = backgrounds.find((background) => background.id === selectedBackgroundId)
+      ? selectedBackgroundId
+      : backgrounds[0]?.id || fallbackActiveBackgroundId || "";
 
     return {
       title: typeof source.title === "string" && source.title.trim()
@@ -47,7 +104,9 @@
       subtitle: typeof source.subtitle === "string" ? source.subtitle : fallback.subtitle || "",
       sections: Array.isArray(source.sections) && source.sections.length
         ? source.sections.map(normalizeSection)
-        : (fallback.sections || []).map(normalizeSection)
+        : (fallback.sections || []).map(normalizeSection),
+      backgrounds,
+      activeBackgroundId
     };
   }
 

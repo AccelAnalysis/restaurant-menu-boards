@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const subtitleElement = document.querySelector("[data-menu-subtitle]");
   const updatedElement = document.querySelector("[data-menu-updated]");
   const sectionsContainer = document.querySelector("[data-menu-sections]");
+  const menuBody = document.querySelector(".menu-body");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
@@ -51,6 +52,24 @@ document.addEventListener("DOMContentLoaded", () => {
     return sectionElement;
   }
 
+  function applyBackground(menu) {
+    if (!menuBody) {
+      return;
+    }
+
+    const backgrounds = Array.isArray(menu.backgrounds) ? menu.backgrounds : [];
+    const activeBackground =
+      backgrounds.find((background) => background.id === menu.activeBackgroundId) || backgrounds[0];
+
+    if (activeBackground) {
+      menuBody.dataset.hasBackground = "true";
+      menuBody.style.setProperty("--menu-background-image", `url("${activeBackground.source}")`);
+    } else {
+      menuBody.dataset.hasBackground = "false";
+      menuBody.style.removeProperty("--menu-background-image");
+    }
+  }
+
   function renderMenu(menu) {
     titleElement.textContent = menu.title;
     subtitleElement.textContent = menu.subtitle || "";
@@ -60,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.sections.forEach((section) => {
       sectionsContainer.appendChild(createSectionElement(section));
     });
+    applyBackground(menu);
   }
 
   renderMenu(window.MenuData.getMenu());

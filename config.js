@@ -53,5 +53,22 @@ window.DEFAULT_MENU = {
         { name: "Fresh Lemonade", description: "Pressed lemons, sparkling water", price: "4" }
       ]
     }
-  ]
+  ],
+  backgrounds: [
+    {
+      id: "bg-sunrise",
+      name: "Sunrise Gradient",
+      source:
+        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
+      origin: "url"
+    },
+    {
+      id: "bg-slate",
+      name: "Slate Texture",
+      source:
+        "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1600&q=80",
+      origin: "url"
+    }
+  ],
+  activeBackgroundId: "bg-sunrise"
 };
