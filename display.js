@@ -84,4 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderMenu(window.MenuData.getMenu());
   window.MenuData.subscribe(renderMenu);
+  if (typeof window.MenuData.syncNow === "function") {
+    window.MenuData.syncNow();
+  }
 });

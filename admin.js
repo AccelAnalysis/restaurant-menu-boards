@@ -361,4 +361,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   renderSections();
+  if (typeof window.MenuData.syncNow === "function") {
+    window.MenuData.syncNow();
+  }
 });

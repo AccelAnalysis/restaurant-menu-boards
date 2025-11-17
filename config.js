@@ -72,3 +72,12 @@ window.DEFAULT_MENU = {
   ],
   activeBackgroundId: "bg-sunrise"
 };
+
+// Configure the published Google Apps Script URL (and optional settings) that
+// backs the shared Google Sheet. Leave the endpoint empty to keep data local.
+window.MENU_SHEETS_CONFIG = {
+  endpoint: "",
+  pollInterval: 10000,
+  token: "",
+  timeoutMs: 15000
+};
