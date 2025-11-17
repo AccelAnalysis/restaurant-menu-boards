@@ -1,10 +1,36 @@
 (function () {
   const STORAGE_KEY = "restaurant-menu-data";
-  const menuListeners = new Set();
-  const boardListeners = new Set();
-  let cachedState = null;
-  let memoryState = null;
+  const listeners = new Set();
+  let cachedMenu = null;
+  let memoryMenu = null;
+  let lastSerializedMenu = null;
   let storageEnabled = typeof window !== "undefined" && "localStorage" in window;
+  const remoteConfig =
+    typeof window !== "undefined" && window.MENU_SHEETS_CONFIG
+      ? window.MENU_SHEETS_CONFIG
+      : {};
+  const remoteEndpoint =
+    typeof remoteConfig.endpoint === "string" ? remoteConfig.endpoint.trim() : "";
+  const remoteToken = typeof remoteConfig.token === "string" ? remoteConfig.token.trim() : "";
+  const remoteTimeout =
+    typeof remoteConfig.timeoutMs === "number" && remoteConfig.timeoutMs > 0
+      ? remoteConfig.timeoutMs
+      : 15000;
+  const remotePollInterval =
+    typeof remoteConfig.pollInterval === "number" && remoteConfig.pollInterval >= 5000
+      ? remoteConfig.pollInterval
+      : 15000;
+  const remoteEnabled = Boolean(remoteEndpoint && typeof window.fetch === "function");
+  const remoteHeaders = Object.assign(
+    { "Content-Type": "application/json" },
+    typeof remoteConfig.headers === "object" && remoteConfig.headers ? remoteConfig.headers : {}
+  );
+  const remoteMode = typeof remoteConfig.mode === "string" ? remoteConfig.mode : "cors";
+  const remoteGetAction = remoteConfig.getAction || "getMenu";
+  const remoteSetAction = remoteConfig.setAction || "setMenu";
+  const remoteState = {
+    inFlight: null
+  };
 
   function clone(object) {
     return JSON.parse(JSON.stringify(object));
@@ -38,12 +64,69 @@
     };
   }
 
+  function normalizeBackground(background = {}, index = 0) {
+    if (typeof background !== "object" || background === null) {
+      return null;
+    }
+
+    const source =
+      typeof background.source === "string" && background.source.trim()
+        ? background.source.trim()
+        : "";
+
+    if (!source) {
+      return null;
+    }
+
+    const name =
+      typeof background.name === "string" && background.name.trim()
+        ? background.name.trim()
+        : `Background ${index + 1}`;
+
+    const id =
+      typeof background.id === "string" && background.id.trim()
+        ? background.id.trim()
+        : `bg-${index + 1}`;
+
+    return {
+      id,
+      name,
+      source,
+      origin: background.origin === "upload" ? "upload" : "url"
+    };
+  }
+
   function normalizeMenu(menu = {}) {
     const source = typeof menu === "object" && menu !== null ? menu : {};
     const fallback =
       typeof window.DEFAULT_MENU === "object" && window.DEFAULT_MENU
         ? window.DEFAULT_MENU
         : { title: "Menu", sections: [] };
+
+    const normalizedFallbackBackgrounds = Array.isArray(fallback.backgrounds)
+      ? fallback.backgrounds.map(normalizeBackground).filter(Boolean)
+      : [];
+
+    const normalizedSourceBackgrounds = Array.isArray(source.backgrounds)
+      ? source.backgrounds.map(normalizeBackground).filter(Boolean)
+      : [];
+
+    const backgrounds = normalizedSourceBackgrounds.length
+      ? normalizedSourceBackgrounds
+      : normalizedFallbackBackgrounds;
+
+    const fallbackActiveBackgroundId = normalizedFallbackBackgrounds.find(
+      (background) => background.id === fallback.activeBackgroundId
+    )
+      ? fallback.activeBackgroundId
+      : normalizedFallbackBackgrounds[0]?.id || "";
+
+    const selectedBackgroundId =
+      typeof source.activeBackgroundId === "string" ? source.activeBackgroundId : "";
+
+    const activeBackgroundId = backgrounds.find((background) => background.id === selectedBackgroundId)
+      ? selectedBackgroundId
+      : backgrounds[0]?.id || fallbackActiveBackgroundId || "";
 
     return {
       title: typeof source.title === "string" && source.title.trim()
@@ -52,7 +135,9 @@
       subtitle: typeof source.subtitle === "string" ? source.subtitle : fallback.subtitle || "",
       sections: Array.isArray(source.sections) && source.sections.length
         ? source.sections.map(normalizeSection)
-        : (fallback.sections || []).map(normalizeSection)
+        : (fallback.sections || []).map(normalizeSection),
+      backgrounds,
+      activeBackgroundId
     };
   }
 
@@ -101,20 +186,10 @@
     }
   }
 
-  function createBoardFromMenu(menu, name) {
-    const normalizedMenu = normalizeMenu(menu);
-    return {
-      id: generateId(),
-      name: name || normalizedMenu.title || "Menu Board",
-      menu: normalizedMenu
-    };
-  }
-
-  function normalizeBoardsState(state) {
-    const fallbackBoard = createBoardFromMenu(window.DEFAULT_MENU, "Main Board");
-
-    if (!state || typeof state !== "object") {
-      return { boards: [fallbackBoard], activeBoardId: fallbackBoard.id };
+  function ensureMemoryMenu() {
+    if (!memoryMenu) {
+      memoryMenu = normalizeMenu(window.DEFAULT_MENU);
+      lastSerializedMenu = JSON.stringify(memoryMenu);
     }
 
     // Handle legacy single menu objects
@@ -162,7 +237,9 @@
     }
 
     try {
-      return normalizeBoardsState(JSON.parse(raw));
+      const parsed = normalizeMenu(JSON.parse(raw));
+      lastSerializedMenu = JSON.stringify(parsed);
+      return parsed;
     } catch (error) {
       console.warn("Unable to parse stored menu data. Falling back to defaults.", error);
       safeRemoveItem(STORAGE_KEY);
@@ -211,102 +288,33 @@
     });
   }
 
-  function notifyBoardListeners() {
-    const snapshot = getBoards();
-    boardListeners.forEach((listener) => {
-      try {
-        listener(snapshot);
-      } catch (error) {
-        console.error("Board listener failed", error);
-      }
-    });
-  }
-
-  function saveState(state) {
-    cachedState = normalizeBoardsState(state);
-    const serialized = JSON.stringify(cachedState);
-    memoryState = cachedState;
+  function saveMenu(menu) {
+    cachedMenu = normalizeMenu(menu);
+    const serialized = JSON.stringify(cachedMenu);
+    lastSerializedMenu = serialized;
+    memoryMenu = cachedMenu;
     safeSetItem(STORAGE_KEY, serialized);
-    notifyMenuListeners();
-    notifyBoardListeners();
-    return getState();
-  }
-
-  function updateBoard(boardId, updater) {
-    const state = getState();
-    const board = state.boards.find((entry) => entry.id === boardId);
-    if (!board) {
-      return state;
+    notifyListeners();
+    if (remoteEnabled) {
+      remoteSaveMenu(cachedMenu).catch((error) => {
+        console.error("Unable to save menu to Google Sheets", error);
+      });
     }
-    updater(board);
-    return saveState(state);
+    return getMenu();
   }
 
-  function saveMenu(menu, boardId) {
-    const targetBoardId = boardId || getState().activeBoardId;
-    updateBoard(targetBoardId, (board) => {
-      board.menu = normalizeMenu(menu);
-    });
-    return getMenu(targetBoardId);
-  }
-
-  function resetMenu(boardId) {
-    const targetBoardId = boardId || getState().activeBoardId;
-    updateBoard(targetBoardId, (board) => {
-      board.menu = normalizeMenu(window.DEFAULT_MENU);
-    });
-    return getMenu(targetBoardId);
-  }
-
-  function createBoard(options = {}) {
-    const { name, sourceBoardId } = options;
-    const state = getState();
-    let templateMenu = window.DEFAULT_MENU;
-    let sourceBoard = null;
-    if (sourceBoardId) {
-      sourceBoard = state.boards.find((board) => board.id === sourceBoardId) || null;
-      if (sourceBoard) {
-        templateMenu = sourceBoard.menu;
-      }
+  function resetMenu() {
+    safeRemoveItem(STORAGE_KEY);
+    cachedMenu = normalizeMenu(window.DEFAULT_MENU);
+    memoryMenu = cachedMenu;
+    lastSerializedMenu = JSON.stringify(cachedMenu);
+    notifyListeners();
+    if (remoteEnabled) {
+      remoteSaveMenu(cachedMenu).catch((error) => {
+        console.error("Unable to reset menu in Google Sheets", error);
+      });
     }
-    const boardName = name || (sourceBoard ? `${sourceBoard.name} Copy` : "New Board");
-    const newBoard = createBoardFromMenu(templateMenu, boardName);
-    state.boards.push(newBoard);
-    state.activeBoardId = newBoard.id;
-    saveState(state);
-    return { id: newBoard.id, name: newBoard.name };
-  }
-
-  function renameBoard(boardId, newName) {
-    const trimmedName = typeof newName === "string" ? newName.trim() : "";
-    updateBoard(boardId, (board) => {
-      board.name = trimmedName || board.name;
-    });
-  }
-
-  function deleteBoard(boardId) {
-    const state = getState();
-    if (state.boards.length <= 1) {
-      return state;
-    }
-    const remainingBoards = state.boards.filter((board) => board.id !== boardId);
-    if (!remainingBoards.length) {
-      return state;
-    }
-    state.boards = remainingBoards;
-    if (state.activeBoardId === boardId) {
-      state.activeBoardId = remainingBoards[0].id;
-    }
-    return saveState(state);
-  }
-
-  function setActiveBoard(boardId) {
-    const state = getState();
-    if (!state.boards.some((board) => board.id === boardId)) {
-      return state;
-    }
-    state.activeBoardId = boardId;
-    return saveState(state);
+    return getMenu();
   }
 
   function subscribe(listener, options = {}) {
@@ -327,17 +335,185 @@
     return () => boardListeners.delete(listener);
   }
 
+  function appendQuery(url, queryString) {
+    if (!queryString) {
+      return url;
+    }
+    return url.includes("?") ? `${url}&${queryString}` : `${url}?${queryString}`;
+  }
+
+  function sanitizeRemoteText(text = "") {
+    return text.replace(/^\)\]\}'/, "").trim();
+  }
+
+  function parseRemoteJson(text) {
+    if (!text) {
+      return null;
+    }
+    try {
+      return JSON.parse(sanitizeRemoteText(text));
+    } catch (error) {
+      console.warn("Unable to parse response from Google Sheets", error);
+      return null;
+    }
+  }
+
+  function extractMenu(payload) {
+    if (!payload) {
+      return null;
+    }
+    if (typeof payload === "string") {
+      try {
+        return JSON.parse(payload);
+      } catch (error) {
+        console.warn("Unable to parse menu payload from string", error);
+        return null;
+      }
+    }
+    if (typeof payload.menu === "string") {
+      return extractMenu(payload.menu);
+    }
+    if (typeof payload.menu === "object" && payload.menu !== null) {
+      return payload.menu;
+    }
+    if (typeof payload.data === "object" && payload.data !== null) {
+      return payload.data;
+    }
+    if (typeof payload.result === "object" && payload.result !== null) {
+      return payload.result;
+    }
+    if (typeof payload.body === "object" && payload.body !== null) {
+      return payload.body;
+    }
+    return typeof payload === "object" ? payload : null;
+  }
+
+  function withTimeout(controller) {
+    if (!controller || !remoteTimeout) {
+      return null;
+    }
+    return setTimeout(() => controller.abort(), remoteTimeout);
+  }
+
+  async function remoteFetchMenu() {
+    if (!remoteEnabled) {
+      return null;
+    }
+
+    const params = new URLSearchParams({ action: remoteGetAction });
+    if (remoteToken) {
+      params.set("token", remoteToken);
+    }
+
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = withTimeout(controller);
+    try {
+      const response = await fetch(appendQuery(remoteEndpoint, params.toString()), {
+        method: "GET",
+        mode: remoteMode,
+        signal: controller ? controller.signal : undefined
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Google Sheets fetch failed: ${response.status} ${text}`);
+      }
+      return extractMenu(parseRemoteJson(text));
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  async function remoteSaveMenu(menu) {
+    if (!remoteEnabled) {
+      return null;
+    }
+
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = withTimeout(controller);
+    try {
+      const payload = {
+        action: remoteSetAction,
+        menu
+      };
+      if (remoteToken) {
+        payload.token = remoteToken;
+      }
+      const response = await fetch(remoteEndpoint, {
+        method: remoteConfig.method || "POST",
+        headers: remoteHeaders,
+        body: JSON.stringify(payload),
+        mode: remoteMode,
+        signal: controller ? controller.signal : undefined
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Google Sheets save failed: ${response.status} ${text}`);
+      }
+      return extractMenu(parseRemoteJson(text));
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  function syncFromRemote(options = {}) {
+    if (!remoteEnabled) {
+      return Promise.resolve(null);
+    }
+    if (remoteState.inFlight) {
+      return remoteState.inFlight;
+    }
+
+    const force = Boolean(options.force);
+    remoteState.inFlight = remoteFetchMenu()
+      .then((remoteMenu) => {
+        if (!remoteMenu) {
+          return null;
+        }
+        const normalized = normalizeMenu(remoteMenu);
+        const serialized = JSON.stringify(normalized);
+        if (force || serialized !== lastSerializedMenu) {
+          cachedMenu = normalized;
+          memoryMenu = normalized;
+          lastSerializedMenu = serialized;
+          safeSetItem(STORAGE_KEY, serialized);
+          notifyListeners();
+        }
+        return normalized;
+      })
+      .catch((error) => {
+        console.warn("Unable to sync menu from Google Sheets", error);
+        return null;
+      })
+      .finally(() => {
+        remoteState.inFlight = null;
+      });
+
+    return remoteState.inFlight;
+  }
+
+  if (remoteEnabled) {
+    syncFromRemote({ force: true });
+    setInterval(() => {
+      syncFromRemote();
+    }, remotePollInterval);
+    window.addEventListener("focus", () => {
+      syncFromRemote();
+    });
+    window.addEventListener("online", () => {
+      syncFromRemote({ force: true });
+    });
+  }
+
   window.MenuData = {
     getMenu,
     saveMenu,
     resetMenu,
     subscribe,
-    subscribeBoards,
-    getBoards,
-    createBoard,
-    renameBoard,
-    deleteBoard,
-    setActiveBoard
+    syncNow: () => syncFromRemote({ force: true })
   };
 
   window.addEventListener("storage", (event) => {

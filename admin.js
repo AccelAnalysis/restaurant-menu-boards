@@ -4,22 +4,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const resetButton = document.querySelector("[data-reset]");
   const titleInput = document.querySelector("[data-menu-title-input]");
   const subtitleInput = document.querySelector("[data-menu-subtitle-input]");
-  const boardSelect = document.querySelector("[data-board-select]");
-  const boardNameInput = document.querySelector("[data-board-name-input]");
-  const addBoardButton = document.querySelector("[data-add-board]");
-  const duplicateBoardButton = document.querySelector("[data-duplicate-board]");
-  const deleteBoardButton = document.querySelector("[data-delete-board]");
+  const backgroundsContainer = document.querySelector("[data-backgrounds]");
+  const backgroundNameInput = document.querySelector("[data-background-name]");
+  const backgroundUrlInput = document.querySelector("[data-background-url]");
+  const addBackgroundUrlButton = document.querySelector("[data-add-background-url]");
+  const backgroundUploadInput = document.querySelector("[data-background-upload]");
 
   if (
     !sectionsContainer ||
     !addSectionButton ||
     !titleInput ||
     !subtitleInput ||
-    !boardSelect ||
-    !boardNameInput ||
-    !addBoardButton ||
-    !duplicateBoardButton ||
-    !deleteBoardButton
+    !backgroundsContainer ||
+    !addBackgroundUrlButton ||
+    !backgroundUrlInput ||
+    !backgroundUploadInput
   ) {
     console.error("Admin markup is missing required elements.");
     return;
@@ -71,6 +70,114 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function ensureBackgroundState() {
+    if (!Array.isArray(menu.backgrounds)) {
+      menu.backgrounds = [];
+    }
+
+    if (menu.backgrounds.length && !menu.activeBackgroundId) {
+      menu.activeBackgroundId = menu.backgrounds[0].id;
+    }
+  }
+
+  function createBackgroundId() {
+    return `bg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  function addBackground({ source, name, origin }) {
+    const trimmedSource = typeof source === "string" ? source.trim() : "";
+    if (!trimmedSource) {
+      alert("Please provide an image URL or upload a file.");
+      return;
+    }
+
+    ensureBackgroundState();
+
+    const label = name && name.trim() ? name.trim() : `Background ${menu.backgrounds.length + 1}`;
+    const background = {
+      id: createBackgroundId(),
+      name: label,
+      source: trimmedSource,
+      origin: origin === "upload" ? "upload" : "url"
+    };
+
+    menu.backgrounds.push(background);
+    if (!menu.activeBackgroundId) {
+      menu.activeBackgroundId = background.id;
+    }
+
+    persistMenu();
+    renderBackgrounds();
+  }
+
+  function renderBackgrounds() {
+    ensureBackgroundState();
+    backgroundsContainer.innerHTML = "";
+
+    if (!menu.backgrounds.length) {
+      const empty = document.createElement("p");
+      empty.className = "background-empty";
+      empty.textContent = "Add a background using the fields above.";
+      backgroundsContainer.appendChild(empty);
+      return;
+    }
+
+    menu.backgrounds.forEach((background) => {
+      const card = document.createElement("article");
+      card.className = "background-card";
+      card.dataset.backgroundId = background.id;
+      if (menu.activeBackgroundId === background.id) {
+        card.classList.add("is-active");
+      }
+
+      const preview = document.createElement("div");
+      preview.className = "background-card__preview";
+      preview.style.backgroundImage = `url("${background.source}")`;
+
+      const body = document.createElement("div");
+      body.className = "background-card__body";
+
+      const details = document.createElement("div");
+      const name = document.createElement("p");
+      name.className = "background-card__name";
+      name.textContent = background.name || "Background";
+      const meta = document.createElement("p");
+      meta.className = "background-card__meta";
+      meta.textContent = background.origin === "upload" ? "Uploaded image" : "Linked image";
+      details.appendChild(name);
+      details.appendChild(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "background-card__actions";
+      if (menu.activeBackgroundId === background.id) {
+        const badge = document.createElement("span");
+        badge.className = "background-card__badge";
+        badge.textContent = "Active";
+        actions.appendChild(badge);
+      } else {
+        const selectButton = document.createElement("button");
+        selectButton.type = "button";
+        selectButton.textContent = "Use background";
+        selectButton.dataset.setBackground = "true";
+        actions.appendChild(selectButton);
+      }
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "ghost";
+      removeButton.textContent = "Remove";
+      removeButton.dataset.removeBackground = "true";
+      actions.appendChild(removeButton);
+
+      body.appendChild(details);
+      body.appendChild(actions);
+      card.appendChild(preview);
+      card.appendChild(body);
+
+      backgroundsContainer.appendChild(card);
+    });
+  }
+
   function createItemEditor(sectionIndex, item, itemIndex) {
     const element = document.createElement("div");
     element.className = "item-editor";
@@ -118,6 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.sections.forEach((section, index) => {
       sectionsContainer.appendChild(createSectionEditor(section, index));
     });
+    renderBackgrounds();
   }
 
   function ensureSection(sectionIndex) {
@@ -208,6 +316,68 @@ document.addEventListener("DOMContentLoaded", () => {
     persistMenu();
   });
 
+  addBackgroundUrlButton.addEventListener("click", () => {
+    const source = backgroundUrlInput.value.trim();
+    if (!source) {
+      backgroundUrlInput.focus();
+      return;
+    }
+    const name = backgroundNameInput ? backgroundNameInput.value : "";
+    addBackground({ source, name, origin: "url" });
+    backgroundUrlInput.value = "";
+    if (backgroundNameInput) {
+      backgroundNameInput.value = "";
+    }
+  });
+
+  backgroundUploadInput.addEventListener("change", (event) => {
+    const files = event.target.files;
+    if (!files || !files.length) {
+      return;
+    }
+    const file = files[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        alert("Unable to read that file. Please try another image.");
+        return;
+      }
+      addBackground({ source: reader.result, name: file.name, origin: "upload" });
+    };
+    reader.onerror = (error) => {
+      console.error("Unable to read uploaded file", error);
+      alert("Unable to read that file. Please try another image.");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  });
+
+  backgroundsContainer.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-background-id]");
+    if (!card) {
+      return;
+    }
+    const backgroundId = card.dataset.backgroundId;
+
+    if (event.target.matches("[data-set-background]")) {
+      menu.activeBackgroundId = backgroundId;
+      persistMenu();
+      renderBackgrounds();
+    }
+
+    if (event.target.matches("[data-remove-background]")) {
+      menu.backgrounds = menu.backgrounds.filter((background) => background.id !== backgroundId);
+      if (menu.activeBackgroundId === backgroundId) {
+        menu.activeBackgroundId = menu.backgrounds[0]?.id || "";
+      }
+      persistMenu();
+      renderBackgrounds();
+    }
+  });
+
   window.MenuData.subscribe((latestMenu) => {
     if (skipNextRender) {
       return;
@@ -257,4 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderBoardControls(boardsState);
   renderSections();
+  if (typeof window.MenuData.syncNow === "function") {
+    window.MenuData.syncNow();
+  }
 });

@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const subtitleElement = document.querySelector("[data-menu-subtitle]");
   const updatedElement = document.querySelector("[data-menu-updated]");
   const sectionsContainer = document.querySelector("[data-menu-sections]");
-  const boardLabelElement = document.querySelector("[data-board-label]");
+  const menuBody = document.querySelector(".menu-body");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
@@ -68,6 +68,24 @@ document.addEventListener("DOMContentLoaded", () => {
     return sectionElement;
   }
 
+  function applyBackground(menu) {
+    if (!menuBody) {
+      return;
+    }
+
+    const backgrounds = Array.isArray(menu.backgrounds) ? menu.backgrounds : [];
+    const activeBackground =
+      backgrounds.find((background) => background.id === menu.activeBackgroundId) || backgrounds[0];
+
+    if (activeBackground) {
+      menuBody.dataset.hasBackground = "true";
+      menuBody.style.setProperty("--menu-background-image", `url("${activeBackground.source}")`);
+    } else {
+      menuBody.dataset.hasBackground = "false";
+      menuBody.style.removeProperty("--menu-background-image");
+    }
+  }
+
   function renderMenu(menu) {
     titleElement.textContent = menu.title;
     subtitleElement.textContent = menu.subtitle || "";
@@ -77,30 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.sections.forEach((section) => {
       sectionsContainer.appendChild(createSectionElement(section));
     });
+    applyBackground(menu);
   }
 
-  function subscribeToBoard(boardId) {
-    if (typeof unsubscribeMenu === "function") {
-      unsubscribeMenu();
-    }
-    unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
+  renderMenu(window.MenuData.getMenu());
+  window.MenuData.subscribe(renderMenu);
+  if (typeof window.MenuData.syncNow === "function") {
+    window.MenuData.syncNow();
   }
-
-  function switchBoard(boardId) {
-    displayBoardId = boardId;
-    updateBoardLabel(window.MenuData.getBoards());
-    renderMenu(window.MenuData.getMenu(boardId));
-    subscribeToBoard(boardId);
-  }
-
-  switchBoard(displayBoardId);
-
-  window.MenuData.subscribeBoards((state) => {
-    const boardExists = state.boards.some((board) => board.id === displayBoardId);
-    if (!boardExists) {
-      switchBoard(state.activeBoardId);
-      return;
-    }
-    updateBoardLabel(state);
-  });
 });
