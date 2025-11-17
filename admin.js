@@ -9,6 +9,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const backgroundUrlInput = document.querySelector("[data-background-url]");
   const addBackgroundUrlButton = document.querySelector("[data-add-background-url]");
   const backgroundUploadInput = document.querySelector("[data-background-upload]");
+  const boardSelect = document.querySelector("[data-board-select]");
+  const boardNameInput = document.querySelector("[data-board-name-input]");
+  const addBoardButton = document.querySelector("[data-add-board]");
+  const duplicateBoardButton = document.querySelector("[data-duplicate-board]");
+  const deleteBoardButton = document.querySelector("[data-delete-board]");
 
   if (
     !sectionsContainer ||
@@ -18,7 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
     !backgroundsContainer ||
     !addBackgroundUrlButton ||
     !backgroundUrlInput ||
-    !backgroundUploadInput
+    !backgroundUploadInput ||
+    !boardSelect ||
+    !boardNameInput ||
+    !addBoardButton ||
+    !duplicateBoardButton ||
+    !deleteBoardButton
   ) {
     console.error("Admin markup is missing required elements.");
     return;
