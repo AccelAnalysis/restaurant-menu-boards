@@ -5,6 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const sectionsContainer = document.querySelector("[data-menu-sections]");
   const boardLabelElement = document.querySelector("[data-board-label]");
   const boardToggleButton = document.querySelector("[data-board-toggle]");
+  const menuBody = document.querySelector(".menu-body");
+  const boardLabelElement = document.querySelector("[data-board-label]");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
@@ -28,11 +30,38 @@ document.addEventListener("DOMContentLoaded", () => {
   let unsubscribeBoards = null;
 
   function updateBoardLabel(state = boardsState) {
+  const boardState = window.MenuData.getBoards();
+  const params = new URLSearchParams(window.location.search);
+  const requestedBoardId = params.get("board");
+  let displayBoardId = boardState.boards.some((board) => board.id === requestedBoardId)
+    ? requestedBoardId
+    : boardState.activeBoardId;
+  let unsubscribeMenu = null;
+
+  function updateBoardLabel(state = window.MenuData.getBoards()) {
     if (!boardLabelElement) {
       return;
     }
     const board = state.boards.find((entry) => entry.id === displayBoardId);
     boardLabelElement.textContent = board ? board.name : "";
+  }
+
+  function subscribeToBoard(boardId) {
+    if (unsubscribeMenu) {
+      unsubscribeMenu();
+    }
+    if (typeof window.MenuData.subscribe === "function") {
+      unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
+    }
+  }
+
+  function handleBoardUpdates(state) {
+    if (!state.boards.some((board) => board.id === displayBoardId)) {
+      displayBoardId = state.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId));
+      subscribeToBoard(displayBoardId);
+    }
+    updateBoardLabel(state);
   }
 
   function formatTimestamp() {
@@ -77,6 +106,24 @@ document.addEventListener("DOMContentLoaded", () => {
     return sectionElement;
   }
 
+  function applyBackground(menu) {
+    if (!menuBody) {
+      return;
+    }
+
+    const backgrounds = Array.isArray(menu.backgrounds) ? menu.backgrounds : [];
+    const activeBackground =
+      backgrounds.find((background) => background.id === menu.activeBackgroundId) || backgrounds[0];
+
+    if (activeBackground) {
+      menuBody.dataset.hasBackground = "true";
+      menuBody.style.setProperty("--menu-background-image", `url("${activeBackground.source}")`);
+    } else {
+      menuBody.dataset.hasBackground = "false";
+      menuBody.style.removeProperty("--menu-background-image");
+    }
+  }
+
   function renderMenu(menu) {
     titleElement.textContent = menu.title;
     subtitleElement.textContent = menu.subtitle || "";
@@ -86,6 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.sections.forEach((section) => {
       sectionsContainer.appendChild(createSectionElement(section));
     });
+    applyBackground(menu);
   }
 
   function subscribeToBoard(boardId) {
@@ -138,5 +186,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (boardToggleButton) {
     boardToggleButton.addEventListener("click", cycleBoard);
+  renderMenu(window.MenuData.getMenu(displayBoardId));
+  subscribeToBoard(displayBoardId);
+  updateBoardLabel(boardState);
+  window.MenuData.subscribeBoards(handleBoardUpdates);
+  if (typeof window.MenuData.syncNow === "function") {
+    window.MenuData.syncNow();
   }
 });
