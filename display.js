@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const updatedElement = document.querySelector("[data-menu-updated]");
   const sectionsContainer = document.querySelector("[data-menu-sections]");
   const menuBody = document.querySelector(".menu-body");
+  const boardLabelElement = document.querySelector("[data-board-label]");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
@@ -24,6 +25,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const board = state.boards.find((entry) => entry.id === displayBoardId);
     boardLabelElement.textContent = board ? board.name : "";
+  }
+
+  function subscribeToBoard(boardId) {
+    if (unsubscribeMenu) {
+      unsubscribeMenu();
+    }
+    if (typeof window.MenuData.subscribe === "function") {
+      unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
+    }
+  }
+
+  function handleBoardUpdates(state) {
+    if (!state.boards.some((board) => board.id === displayBoardId)) {
+      displayBoardId = state.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId));
+      subscribeToBoard(displayBoardId);
+    }
+    updateBoardLabel(state);
   }
 
   function formatTimestamp() {
@@ -98,8 +117,10 @@ document.addEventListener("DOMContentLoaded", () => {
     applyBackground(menu);
   }
 
-  renderMenu(window.MenuData.getMenu());
-  window.MenuData.subscribe(renderMenu);
+  renderMenu(window.MenuData.getMenu(displayBoardId));
+  subscribeToBoard(displayBoardId);
+  updateBoardLabel(boardState);
+  window.MenuData.subscribeBoards(handleBoardUpdates);
   if (typeof window.MenuData.syncNow === "function") {
     window.MenuData.syncNow();
   }

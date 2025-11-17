@@ -1,9 +1,10 @@
 (function () {
-  const STORAGE_KEY = "restaurant-menu-data";
-  const listeners = new Set();
-  let cachedMenu = null;
-  let memoryMenu = null;
-  let lastSerializedMenu = null;
+  const STORAGE_KEY = "restaurant-menu-boards";
+  const menuListeners = new Set();
+  const boardListeners = new Set();
+  let cachedState = null;
+  let memoryState = null;
+  let lastSerializedState = null;
   let storageEnabled = typeof window !== "undefined" && "localStorage" in window;
   const remoteConfig =
     typeof window !== "undefined" && window.MENU_SHEETS_CONFIG
@@ -56,11 +57,8 @@
       name: typeof section.name === "string" && section.name.trim()
         ? section.name
         : "Untitled Section",
-      description:
-        typeof section.description === "string" ? section.description : "",
-      items: Array.isArray(section.items)
-        ? section.items.map(normalizeItem)
-        : []
+      description: typeof section.description === "string" ? section.description : "",
+      items: Array.isArray(section.items) ? section.items.map(normalizeItem) : []
     };
   }
 
@@ -141,6 +139,55 @@
     };
   }
 
+  function createBoardFromMenu(menu, name, id) {
+    return {
+      id: typeof id === "string" && id.trim() ? id.trim() : generateId(),
+      name: typeof name === "string" && name.trim() ? name.trim() : "Menu Board",
+      menu: normalizeMenu(menu)
+    };
+  }
+
+  function normalizeBoardsState(state = {}) {
+    if (!Array.isArray(state.boards) && typeof state === "object" && state !== null) {
+      if (state.title || state.sections || state.menu) {
+        const legacyMenu = state.menu || state;
+        const legacyBoard = createBoardFromMenu(
+          legacyMenu,
+          state.name || state.title || "Main Board"
+        );
+        return { boards: [legacyBoard], activeBoardId: legacyBoard.id };
+      }
+    }
+
+    const boards = Array.isArray(state.boards)
+      ? state.boards
+          .map((board, index) => {
+            if (!board || typeof board !== "object") {
+              return null;
+            }
+            const id =
+              typeof board.id === "string" && board.id.trim() ? board.id.trim() : generateId();
+            const name =
+              typeof board.name === "string" && board.name.trim()
+                ? board.name.trim()
+                : `Board ${index + 1}`;
+            const menuSource = board.menu || board;
+            return { id, name, menu: normalizeMenu(menuSource) };
+          })
+          .filter(Boolean)
+      : [];
+
+    if (!boards.length) {
+      boards.push(createBoardFromMenu(window.DEFAULT_MENU, "Main Board"));
+    }
+
+    const activeBoardId = boards.some((board) => board.id === state.activeBoardId)
+      ? state.activeBoardId
+      : boards[0].id;
+
+    return { boards, activeBoardId };
+  }
+
   function disableStorage(error) {
     if (!storageEnabled) return;
     storageEnabled = false;
@@ -186,46 +233,10 @@
     }
   }
 
-  function ensureMemoryMenu() {
-    if (!memoryMenu) {
-      memoryMenu = normalizeMenu(window.DEFAULT_MENU);
-      lastSerializedMenu = JSON.stringify(memoryMenu);
-    }
-
-    // Handle legacy single menu objects
-    if (!Array.isArray(state.boards)) {
-      const legacyBoard = createBoardFromMenu(state, state.title || "Main Board");
-      return { boards: [legacyBoard], activeBoardId: legacyBoard.id };
-    }
-
-    const boards = state.boards
-      .map((board, index) => {
-        if (!board || typeof board !== "object") {
-          return null;
-        }
-        const id = typeof board.id === "string" ? board.id : generateId() + index;
-        const name = typeof board.name === "string" && board.name.trim()
-          ? board.name
-          : `Board ${index + 1}`;
-        const menu = normalizeMenu(board.menu);
-        return { id, name, menu };
-      })
-      .filter(Boolean);
-
-    if (!boards.length) {
-      boards.push(fallbackBoard);
-    }
-
-    const activeBoardId = boards.some((board) => board.id === state.activeBoardId)
-      ? state.activeBoardId
-      : boards[0].id;
-
-    return { boards, activeBoardId };
-  }
-
   function ensureMemoryState() {
     if (!memoryState) {
       memoryState = normalizeBoardsState({});
+      lastSerializedState = JSON.stringify(memoryState);
     }
     return memoryState;
   }
@@ -237,8 +248,8 @@
     }
 
     try {
-      const parsed = normalizeMenu(JSON.parse(raw));
-      lastSerializedMenu = JSON.stringify(parsed);
+      const parsed = normalizeBoardsState(JSON.parse(raw));
+      lastSerializedState = JSON.stringify(parsed);
       return parsed;
     } catch (error) {
       console.warn("Unable to parse stored menu data. Falling back to defaults.", error);
@@ -254,13 +265,35 @@
     return clone(cachedState);
   }
 
+  function resolveBoardId(state, requestedId) {
+    if (requestedId && state.boards.some((board) => board.id === requestedId)) {
+      return requestedId;
+    }
+    return state.activeBoardId;
+  }
+
+  function commitState(nextState) {
+    const normalized = normalizeBoardsState(nextState);
+    const serialized = JSON.stringify(normalized);
+    cachedState = clone(normalized);
+    memoryState = normalized;
+    lastSerializedState = serialized;
+    safeSetItem(STORAGE_KEY, serialized);
+    notifyBoardListeners();
+    notifyMenuListeners();
+    if (remoteEnabled) {
+      remoteSaveState(normalized).catch((error) => {
+        console.error("Unable to save menu to Google Sheets", error);
+      });
+    }
+    return getState();
+  }
+
   function getMenu(boardId) {
     const state = getState();
-    const targetBoard = boardId
-      ? state.boards.find((board) => board.id === boardId)
-      : state.boards.find((board) => board.id === state.activeBoardId);
-    const fallbackBoard = state.boards[0];
-    return clone((targetBoard || fallbackBoard).menu);
+    const targetBoardId = resolveBoardId(state, boardId);
+    const targetBoard = state.boards.find((board) => board.id === targetBoardId) || state.boards[0];
+    return clone(targetBoard.menu);
   }
 
   function getBoards(options = {}) {
@@ -278,43 +311,69 @@
     };
   }
 
-  function notifyMenuListeners() {
-    menuListeners.forEach((listener) => {
-      try {
-        listener.callback(getMenu(listener.boardId));
-      } catch (error) {
-        console.error("Menu listener failed", error);
-      }
-    });
+  function saveMenu(menu, boardId) {
+    const normalizedMenu = normalizeMenu(menu);
+    const state = getState();
+    const targetBoardId = resolveBoardId(state, boardId);
+    const boards = state.boards.map((board) =>
+      board.id === targetBoardId ? { ...board, menu: normalizedMenu } : board
+    );
+    commitState({ ...state, boards });
+    return getMenu(targetBoardId);
   }
 
-  function saveMenu(menu) {
-    cachedMenu = normalizeMenu(menu);
-    const serialized = JSON.stringify(cachedMenu);
-    lastSerializedMenu = serialized;
-    memoryMenu = cachedMenu;
-    safeSetItem(STORAGE_KEY, serialized);
-    notifyListeners();
-    if (remoteEnabled) {
-      remoteSaveMenu(cachedMenu).catch((error) => {
-        console.error("Unable to save menu to Google Sheets", error);
-      });
-    }
-    return getMenu();
+  function resetMenu(boardId) {
+    return saveMenu(window.DEFAULT_MENU, boardId);
   }
 
-  function resetMenu() {
-    safeRemoveItem(STORAGE_KEY);
-    cachedMenu = normalizeMenu(window.DEFAULT_MENU);
-    memoryMenu = cachedMenu;
-    lastSerializedMenu = JSON.stringify(cachedMenu);
-    notifyListeners();
-    if (remoteEnabled) {
-      remoteSaveMenu(cachedMenu).catch((error) => {
-        console.error("Unable to reset menu in Google Sheets", error);
-      });
+  function setActiveBoard(boardId) {
+    const state = getState();
+    if (!state.boards.some((board) => board.id === boardId)) {
+      return state;
     }
-    return getMenu();
+    if (state.activeBoardId === boardId) {
+      return state;
+    }
+    return commitState({ ...state, activeBoardId: boardId });
+  }
+
+  function renameBoard(boardId, name) {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    const state = getState();
+    const boards = state.boards.map((board) =>
+      board.id === boardId && trimmed ? { ...board, name: trimmed } : board
+    );
+    commitState({ ...state, boards });
+  }
+
+  function createBoard(options = {}) {
+    const state = getState();
+    const sourceBoard = options.sourceBoardId
+      ? state.boards.find((board) => board.id === options.sourceBoardId)
+      : null;
+    const name =
+      typeof options.name === "string" && options.name.trim()
+        ? options.name.trim()
+        : sourceBoard
+          ? `${sourceBoard.name} Copy`
+          : `Board ${state.boards.length + 1}`;
+    const menu = sourceBoard ? clone(sourceBoard.menu) : normalizeMenu(window.DEFAULT_MENU);
+    const newBoard = { id: generateId(), name, menu };
+    commitState({ boards: [...state.boards, newBoard], activeBoardId: newBoard.id });
+    return newBoard;
+  }
+
+  function deleteBoard(boardId) {
+    const state = getState();
+    if (state.boards.length <= 1) {
+      const fallback = createBoardFromMenu(window.DEFAULT_MENU, "Main Board", state.boards[0].id);
+      return commitState({ boards: [fallback], activeBoardId: fallback.id });
+    }
+
+    const targetBoardId = resolveBoardId(state, boardId);
+    const boards = state.boards.filter((board) => board.id !== targetBoardId);
+    const activeBoardId = state.activeBoardId === targetBoardId ? boards[0].id : state.activeBoardId;
+    return commitState({ boards, activeBoardId });
   }
 
   function subscribe(listener, options = {}) {
@@ -333,6 +392,27 @@
     }
     boardListeners.add(listener);
     return () => boardListeners.delete(listener);
+  }
+
+  function notifyMenuListeners() {
+    menuListeners.forEach((listener) => {
+      try {
+        listener.callback(getMenu(listener.boardId));
+      } catch (error) {
+        console.error("Menu listener failed", error);
+      }
+    });
+  }
+
+  function notifyBoardListeners() {
+    const snapshot = getBoards();
+    boardListeners.forEach((listener) => {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.error("Board listener failed", error);
+      }
+    });
   }
 
   function appendQuery(url, queryString) {
@@ -358,7 +438,7 @@
     }
   }
 
-  function extractMenu(payload) {
+  function extractPayload(payload) {
     if (!payload) {
       return null;
     }
@@ -366,12 +446,12 @@
       try {
         return JSON.parse(payload);
       } catch (error) {
-        console.warn("Unable to parse menu payload from string", error);
+        console.warn("Unable to parse payload from string", error);
         return null;
       }
     }
     if (typeof payload.menu === "string") {
-      return extractMenu(payload.menu);
+      return extractPayload(payload.menu);
     }
     if (typeof payload.menu === "object" && payload.menu !== null) {
       return payload.menu;
@@ -395,7 +475,7 @@
     return setTimeout(() => controller.abort(), remoteTimeout);
   }
 
-  async function remoteFetchMenu() {
+  async function remoteFetchState() {
     if (!remoteEnabled) {
       return null;
     }
@@ -417,7 +497,7 @@
       if (!response.ok) {
         throw new Error(`Google Sheets fetch failed: ${response.status} ${text}`);
       }
-      return extractMenu(parseRemoteJson(text));
+      return normalizeBoardsState(extractPayload(parseRemoteJson(text)) || {});
     } finally {
       if (timer) {
         clearTimeout(timer);
@@ -425,7 +505,7 @@
     }
   }
 
-  async function remoteSaveMenu(menu) {
+  async function remoteSaveState(state) {
     if (!remoteEnabled) {
       return null;
     }
@@ -435,7 +515,7 @@
     try {
       const payload = {
         action: remoteSetAction,
-        menu
+        menu: state
       };
       if (remoteToken) {
         payload.token = remoteToken;
@@ -451,7 +531,7 @@
       if (!response.ok) {
         throw new Error(`Google Sheets save failed: ${response.status} ${text}`);
       }
-      return extractMenu(parseRemoteJson(text));
+      return normalizeBoardsState(extractPayload(parseRemoteJson(text)) || {});
     } finally {
       if (timer) {
         clearTimeout(timer);
@@ -468,21 +548,21 @@
     }
 
     const force = Boolean(options.force);
-    remoteState.inFlight = remoteFetchMenu()
-      .then((remoteMenu) => {
-        if (!remoteMenu) {
+    remoteState.inFlight = remoteFetchState()
+      .then((remoteStatePayload) => {
+        if (!remoteStatePayload) {
           return null;
         }
-        const normalized = normalizeMenu(remoteMenu);
-        const serialized = JSON.stringify(normalized);
-        if (force || serialized !== lastSerializedMenu) {
-          cachedMenu = normalized;
-          memoryMenu = normalized;
-          lastSerializedMenu = serialized;
+        const serialized = JSON.stringify(remoteStatePayload);
+        if (force || serialized !== lastSerializedState) {
+          cachedState = clone(remoteStatePayload);
+          memoryState = remoteStatePayload;
+          lastSerializedState = serialized;
           safeSetItem(STORAGE_KEY, serialized);
-          notifyListeners();
+          notifyBoardListeners();
+          notifyMenuListeners();
         }
-        return normalized;
+        return remoteStatePayload;
       })
       .catch((error) => {
         console.warn("Unable to sync menu from Google Sheets", error);
@@ -513,14 +593,20 @@
     saveMenu,
     resetMenu,
     subscribe,
+    subscribeBoards,
+    getBoards,
+    setActiveBoard,
+    createBoard,
+    deleteBoard,
+    renameBoard,
     syncNow: () => syncFromRemote({ force: true })
   };
 
   window.addEventListener("storage", (event) => {
     if (event.key === STORAGE_KEY) {
       cachedState = null;
-      notifyMenuListeners();
       notifyBoardListeners();
+      notifyMenuListeners();
     }
   });
 })();
