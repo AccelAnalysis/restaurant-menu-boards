@@ -3,10 +3,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const subtitleElement = document.querySelector("[data-menu-subtitle]");
   const updatedElement = document.querySelector("[data-menu-updated]");
   const sectionsContainer = document.querySelector("[data-menu-sections]");
+  const boardLabelElement = document.querySelector("[data-board-label]");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
     return;
+  }
+
+  const boardState = window.MenuData.getBoards();
+  const params = new URLSearchParams(window.location.search);
+  const requestedBoardId = params.get("board");
+  let displayBoardId = boardState.boards.some((board) => board.id === requestedBoardId)
+    ? requestedBoardId
+    : boardState.activeBoardId;
+  let unsubscribeMenu = null;
+
+  function updateBoardLabel(state = window.MenuData.getBoards()) {
+    if (!boardLabelElement) {
+      return;
+    }
+    const board = state.boards.find((entry) => entry.id === displayBoardId);
+    boardLabelElement.textContent = board ? board.name : "";
   }
 
   function formatTimestamp() {
@@ -62,6 +79,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  renderMenu(window.MenuData.getMenu());
-  window.MenuData.subscribe(renderMenu);
+  function subscribeToBoard(boardId) {
+    if (typeof unsubscribeMenu === "function") {
+      unsubscribeMenu();
+    }
+    unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
+  }
+
+  function switchBoard(boardId) {
+    displayBoardId = boardId;
+    updateBoardLabel(window.MenuData.getBoards());
+    renderMenu(window.MenuData.getMenu(boardId));
+    subscribeToBoard(boardId);
+  }
+
+  switchBoard(displayBoardId);
+
+  window.MenuData.subscribeBoards((state) => {
+    const boardExists = state.boards.some((board) => board.id === displayBoardId);
+    if (!boardExists) {
+      switchBoard(state.activeBoardId);
+      return;
+    }
+    updateBoardLabel(state);
+  });
 });

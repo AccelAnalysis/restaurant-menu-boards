@@ -55,11 +55,20 @@ body {
 
 .menu-subtitle,
 .menu-tagline,
+.menu-board-label,
 .menu-updated,
 .menu-section__description {
   color: rgba(226, 232, 240, 0.9);
   margin: 0;
   font-size: 0.95rem;
+}
+
+.menu-board-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  opacity: 0.8;
 }
 
 .menu-sections {
@@ -212,10 +221,42 @@ button.ghost {
   border: 1px dashed var(--border);
 }
 
+button.danger {
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
 .admin-toolbar {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.board-manager {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.board-manager__row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.board-manager__row--end {
+  justify-content: flex-end;
+}
+
+.board-manager__select {
+  flex: 1;
+  min-width: 200px;
 }
 
 .sections-editor {
