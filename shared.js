@@ -695,6 +695,29 @@
     });
   }
 
+  function notifyMenuListeners() {
+    menuListeners.forEach((listener) => {
+      try {
+        listener.callback(getMenu(listener.boardId));
+      } catch (error) {
+        console.error("Menu listener failed", error);
+      }
+    });
+  }
+
+  function notifyBoardListeners() {
+    const snapshot = getBoards();
+    boardListeners.forEach((listener) => {
+      try {
+        listener.callback(
+          getMenu(listener.boardId, { restaurantId: listener.restaurantId })
+        );
+      } catch (error) {
+        console.error("Board listener failed", error);
+      }
+    });
+  }
+
   function appendQuery(url, queryString) {
     if (!queryString) {
       return url;

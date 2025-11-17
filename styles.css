@@ -38,7 +38,8 @@ body {
 }
 
 .menu-board {
-  width: min(1100px, 100%);
+  width: min(2400px, 100%);
+  height: min(2000px, 100%);
   background: var(--card);
   color: #f8fafc;
   border-radius: 24px;

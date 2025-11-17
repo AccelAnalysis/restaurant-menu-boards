@@ -113,6 +113,24 @@ document.addEventListener("DOMContentLoaded", () => {
     subscribeToBoard(displayBoardId);
   }
 
+  function subscribeToBoard(boardId) {
+    if (unsubscribeMenu) {
+      unsubscribeMenu();
+    }
+    if (typeof window.MenuData.subscribe === "function") {
+      unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
+    }
+  }
+
+  function handleBoardUpdates(state) {
+    if (!state.boards.some((board) => board.id === displayBoardId)) {
+      displayBoardId = state.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId));
+      subscribeToBoard(displayBoardId);
+    }
+    updateBoardLabel(state);
+  }
+
   function formatTimestamp() {
     const date = new Date();
     return date.toLocaleString(undefined, {
