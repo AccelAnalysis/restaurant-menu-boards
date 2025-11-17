@@ -20,22 +20,6 @@
       </header>
       <main>
         <form id="menu-form" autocomplete="off">
-          <section class="restaurant-manager">
-            <div class="board-manager__row">
-              <label class="form-field board-manager__select">
-                <span>Restaurant</span>
-                <select data-restaurant-select></select>
-              </label>
-              <button type="button" data-add-restaurant>Add restaurant</button>
-            </div>
-            <label class="form-field">
-              <span>Restaurant name</span>
-              <input type="text" data-restaurant-name-input placeholder="e.g. Downtown Location" />
-            </label>
-            <div class="board-manager__row board-manager__row--end">
-              <button type="button" data-delete-restaurant class="danger">Delete restaurant</button>
-            </div>
-          </section>
           <section class="board-manager">
             <div class="board-manager__row">
               <label class="form-field board-manager__select">
@@ -67,6 +51,40 @@
           </div>
           <div class="sections-editor" data-sections></div>
         </form>
+        <section class="background-manager">
+          <header>
+            <div>
+              <p class="menu-tagline">Visual Theme</p>
+              <h2>Background library</h2>
+              <p>Save multiple backgrounds by linking images or uploading your own.</p>
+            </div>
+          </header>
+          <div class="background-inputs">
+            <label class="form-field">
+              <span>Label (optional)</span>
+              <input type="text" data-background-name placeholder="Coffee shop mural" />
+            </label>
+            <label class="form-field">
+              <span>Image URL</span>
+              <input
+                type="url"
+                data-background-url
+                placeholder="https://example.com/background.jpg"
+              />
+            </label>
+            <button type="button" data-add-background-url>Add linked image</button>
+          </div>
+          <div class="background-upload">
+            <label class="form-field">
+              <span>Upload image</span>
+              <input type="file" accept="image/*" data-background-upload />
+            </label>
+            <p class="background-upload__hint">
+              Images you link or upload are synced through the connected Google Sheet.
+            </p>
+          </div>
+          <div class="background-list" data-backgrounds></div>
+        </section>
       </main>
     </div>
     <script src="config.js"></script>
