@@ -20,6 +20,23 @@
       </header>
       <main>
         <form id="menu-form" autocomplete="off">
+          <section class="restaurant-manager">
+            <div class="board-manager__row">
+              <label class="form-field board-manager__select">
+                <span>Restaurant</span>
+                <select data-restaurant-select></select>
+              </label>
+              <button type="button" data-add-restaurant>Add restaurant</button>
+              <button type="button" data-duplicate-restaurant class="ghost">Duplicate restaurant</button>
+            </div>
+            <label class="form-field">
+              <span>Restaurant name</span>
+              <input type="text" data-restaurant-name-input placeholder="e.g. Downtown" />
+            </label>
+            <div class="board-manager__row board-manager__row--end">
+              <button type="button" data-delete-restaurant class="danger">Delete restaurant</button>
+            </div>
+          </section>
           <section class="board-manager">
             <div class="board-manager__row">
               <label class="form-field board-manager__select">

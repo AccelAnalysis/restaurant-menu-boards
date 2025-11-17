@@ -46,6 +46,24 @@ body {
   box-shadow: 0 25px 60px rgba(2, 6, 23, 0.45);
 }
 
+.menu-toggle {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 140px;
+  height: 140px;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.menu-toggle:focus-visible {
+  opacity: 0.15;
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 4px;
+}
+
 .menu-header {
   display: flex;
   justify-content: space-between;
@@ -241,7 +259,8 @@ button.danger {
   flex-wrap: wrap;
 }
 
-.board-manager {
+.board-manager,
+.restaurant-manager {
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 1rem;

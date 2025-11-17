@@ -4,26 +4,113 @@ document.addEventListener("DOMContentLoaded", () => {
   const updatedElement = document.querySelector("[data-menu-updated]");
   const sectionsContainer = document.querySelector("[data-menu-sections]");
   const menuBody = document.querySelector(".menu-body");
+  const boardLabelElement = document.querySelector("[data-board-label]");
+  const boardToggleButton = document.querySelector("[data-board-toggle]");
 
   if (!titleElement || !sectionsContainer) {
     console.error("Display markup is missing required elements.");
     return;
   }
 
-  const boardState = window.MenuData.getBoards();
+  const restaurantsState = window.MenuData.getRestaurants();
   const params = new URLSearchParams(window.location.search);
+  const requestedRestaurantId = params.get("restaurant");
   const requestedBoardId = params.get("board");
-  let displayBoardId = boardState.boards.some((board) => board.id === requestedBoardId)
+  let displayRestaurantId = restaurantsState.restaurants.some(
+    (restaurant) => restaurant.id === requestedRestaurantId
+  )
+    ? requestedRestaurantId
+    : restaurantsState.activeRestaurantId;
+  let boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
+  let displayBoardId = boardsState.boards.some((board) => board.id === requestedBoardId)
     ? requestedBoardId
-    : boardState.activeBoardId;
+    : boardsState.activeBoardId;
   let unsubscribeMenu = null;
+  let unsubscribeBoards = null;
 
-  function updateBoardLabel(state = window.MenuData.getBoards()) {
-    if (!boardLabelElement) {
+  function updateBoardLabel(state = boardsState) {
+    if (!boardLabelElement || !state) {
       return;
     }
     const board = state.boards.find((entry) => entry.id === displayBoardId);
-    boardLabelElement.textContent = board ? board.name : "";
+    const labelParts = [];
+    if (state.restaurantName) {
+      labelParts.push(state.restaurantName);
+    }
+    if (board && board.name) {
+      labelParts.push(board.name);
+    }
+    boardLabelElement.textContent = labelParts.join(" • ");
+  }
+
+  function subscribeToBoard(boardId) {
+    if (unsubscribeMenu) {
+      unsubscribeMenu();
+    }
+    if (typeof window.MenuData.subscribe === "function") {
+      unsubscribeMenu = window.MenuData.subscribe(renderMenu, {
+        boardId,
+        restaurantId: displayRestaurantId
+      });
+    }
+  }
+
+  function subscribeToBoards(restaurantId) {
+    if (unsubscribeBoards) {
+      unsubscribeBoards();
+    }
+    if (typeof window.MenuData.subscribeBoards === "function") {
+      unsubscribeBoards = window.MenuData.subscribeBoards(handleBoardUpdates, {
+        restaurantId
+      });
+    }
+  }
+
+  function handleBoardUpdates(state) {
+    boardsState = state;
+    if (!state.boards.some((board) => board.id === displayBoardId)) {
+      displayBoardId = state.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
+      subscribeToBoard(displayBoardId);
+      updateBoardLabel(state);
+      return;
+    }
+    if (state.activeBoardId !== displayBoardId) {
+      displayBoardId = state.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
+      subscribeToBoard(displayBoardId);
+    }
+    updateBoardLabel(state);
+  }
+
+  function handleRestaurantState(state) {
+    const exists = state.restaurants.some((restaurant) => restaurant.id === displayRestaurantId);
+    if (!exists) {
+      displayRestaurantId = state.activeRestaurantId;
+      boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
+      displayBoardId = boardsState.activeBoardId;
+      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
+      subscribeToBoard(displayBoardId);
+      subscribeToBoards(displayRestaurantId);
+      updateBoardLabel(boardsState);
+    }
+  }
+
+  function cycleBoard() {
+    if (!boardsState || boardsState.boards.length <= 1) {
+      return;
+    }
+    const currentIndex = boardsState.boards.findIndex((board) => board.id === displayBoardId);
+    const nextIndex = currentIndex === -1 || currentIndex === boardsState.boards.length - 1
+      ? 0
+      : currentIndex + 1;
+    const nextBoard = boardsState.boards[nextIndex];
+    displayBoardId = nextBoard.id;
+    window.MenuData.setActiveBoard(displayBoardId, displayRestaurantId);
+    boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
+    renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
+    updateBoardLabel(boardsState);
+    subscribeToBoard(displayBoardId);
   }
 
   function formatTimestamp() {
@@ -98,8 +185,20 @@ document.addEventListener("DOMContentLoaded", () => {
     applyBackground(menu);
   }
 
-  renderMenu(window.MenuData.getMenu());
-  window.MenuData.subscribe(renderMenu);
+  if (boardToggleButton) {
+    boardToggleButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      cycleBoard();
+    });
+  }
+
+  renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
+  subscribeToBoard(displayBoardId);
+  updateBoardLabel(boardsState);
+  subscribeToBoards(displayRestaurantId);
+  if (typeof window.MenuData.subscribeRestaurants === "function") {
+    window.MenuData.subscribeRestaurants(handleRestaurantState);
+  }
   if (typeof window.MenuData.syncNow === "function") {
     window.MenuData.syncNow();
   }
