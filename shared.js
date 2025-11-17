@@ -2,6 +2,8 @@
   const STORAGE_KEY = "restaurant-menu-data";
   const listeners = new Set();
   let cachedMenu = null;
+  let memoryMenu = null;
+  let storageEnabled = typeof window !== "undefined" && "localStorage" in window;
 
   function clone(object) {
     return JSON.parse(JSON.stringify(object));
@@ -49,18 +51,70 @@
     };
   }
 
+  function disableStorage(error) {
+    if (!storageEnabled) return;
+    storageEnabled = false;
+    console.warn("Local storage is unavailable; using in-memory data instead.", error);
+  }
+
+  function safeGetItem(key) {
+    if (!storageEnabled) {
+      return null;
+    }
+
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      disableStorage(error);
+      return null;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    if (!storageEnabled) {
+      return false;
+    }
+
+    try {
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      disableStorage(error);
+      return false;
+    }
+  }
+
+  function safeRemoveItem(key) {
+    if (!storageEnabled) {
+      return;
+    }
+
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      disableStorage(error);
+    }
+  }
+
+  function ensureMemoryMenu() {
+    if (!memoryMenu) {
+      memoryMenu = normalizeMenu(window.DEFAULT_MENU);
+    }
+    return memoryMenu;
+  }
+
   function readFromStorage() {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = safeGetItem(STORAGE_KEY);
     if (!raw) {
-      return normalizeMenu(window.DEFAULT_MENU);
+      return ensureMemoryMenu();
     }
 
     try {
       return normalizeMenu(JSON.parse(raw));
     } catch (error) {
       console.warn("Unable to parse stored menu data. Falling back to defaults.", error);
-      localStorage.removeItem(STORAGE_KEY);
-      return normalizeMenu(window.DEFAULT_MENU);
+      safeRemoveItem(STORAGE_KEY);
+      return ensureMemoryMenu();
     }
   }
 
@@ -85,14 +139,17 @@
 
   function saveMenu(menu) {
     cachedMenu = normalizeMenu(menu);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedMenu));
+    const serialized = JSON.stringify(cachedMenu);
+    memoryMenu = cachedMenu;
+    safeSetItem(STORAGE_KEY, serialized);
     notifyListeners();
     return getMenu();
   }
 
   function resetMenu() {
-    localStorage.removeItem(STORAGE_KEY);
+    safeRemoveItem(STORAGE_KEY);
     cachedMenu = normalizeMenu(window.DEFAULT_MENU);
+    memoryMenu = cachedMenu;
     notifyListeners();
     return getMenu();
   }
