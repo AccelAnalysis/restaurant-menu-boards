@@ -408,7 +408,9 @@
     const snapshot = getBoards();
     boardListeners.forEach((listener) => {
       try {
-        listener(snapshot);
+        listener.callback(
+          getMenu(listener.boardId, { restaurantId: listener.restaurantId })
+        );
       } catch (error) {
         console.error("Board listener failed", error);
       }
