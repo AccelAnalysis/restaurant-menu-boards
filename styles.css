@@ -273,6 +273,7 @@ button.danger {
   flex-wrap: wrap;
 }
 
+.restaurant-manager {
 .board-manager {
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -281,6 +282,29 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.restaurant-share {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: white;
+}
+
+.share-link {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.share-link input {
+  flex: 1;
+  background: #fffdfa;
+}
+
+.restaurant-share__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .board-manager__row {

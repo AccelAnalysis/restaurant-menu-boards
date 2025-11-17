@@ -4,6 +4,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const resetButton = document.querySelector("[data-reset]");
   const titleInput = document.querySelector("[data-menu-title-input]");
   const subtitleInput = document.querySelector("[data-menu-subtitle-input]");
+  const restaurantSelect = document.querySelector("[data-restaurant-select]");
+  const restaurantNameInput = document.querySelector("[data-restaurant-name-input]");
+  const restaurantDisplayLinkInput = document.querySelector("[data-restaurant-display-link]");
+  const copyDisplayLinkButton = document.querySelector("[data-copy-display-link]");
+  const addRestaurantButton = document.querySelector("[data-add-restaurant]");
+  const deleteRestaurantButton = document.querySelector("[data-delete-restaurant]");
   const backgroundsContainer = document.querySelector("[data-backgrounds]");
   const backgroundNameInput = document.querySelector("[data-background-name]");
   const backgroundUrlInput = document.querySelector("[data-background-url]");
@@ -20,6 +26,12 @@ document.addEventListener("DOMContentLoaded", () => {
     !addSectionButton ||
     !titleInput ||
     !subtitleInput ||
+    !restaurantSelect ||
+    !restaurantNameInput ||
+    !restaurantDisplayLinkInput ||
+    !copyDisplayLinkButton ||
+    !addRestaurantButton ||
+    !deleteRestaurantButton ||
     !backgroundsContainer ||
     !addBackgroundUrlButton ||
     !backgroundUrlInput ||
@@ -34,6 +46,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  let restaurantsState = window.MenuData.getRestaurants();
+  let activeRestaurantId = restaurantsState.activeRestaurantId;
+  let boardsState = window.MenuData.getBoards({ restaurantId: activeRestaurantId });
+  let activeBoardId = boardsState.activeBoardId;
+  let menu = window.MenuData.getMenu(activeBoardId, { restaurantId: activeRestaurantId });
   let boardsState = window.MenuData.getBoards();
   let activeBoardId = boardsState.activeBoardId;
   let menu = window.MenuData.getMenu(activeBoardId);
@@ -104,6 +121,11 @@ document.addEventListener("DOMContentLoaded", () => {
     deleteRestaurantButton.disabled = state.restaurants.length <= 1;
     restaurantSelect.disabled = state.restaurants.length === 0;
     restaurantNameInput.disabled = state.restaurants.length === 0;
+
+    const displayLink = buildDisplayLink(activeRestaurant ? activeRestaurant.id : null);
+    restaurantDisplayLinkInput.value = displayLink;
+    restaurantDisplayLinkInput.disabled = !activeRestaurant;
+    copyDisplayLinkButton.disabled = !activeRestaurant;
   }
 
   function renderBoardControls(state) {
@@ -132,30 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
     boardSelect.disabled = !hasBoards;
   }
 
-  function renderBoardControls(state = window.MenuData.getBoards()) {
-    boardsState = state;
-    activeBoardId = state.activeBoardId;
-
-    boardSelect.innerHTML = "";
-    state.boards.forEach((board) => {
-      const option = document.createElement("option");
-      option.value = board.id;
-      option.textContent = board.name;
-      if (board.id === state.activeBoardId) {
-        option.selected = true;
-      }
-      boardSelect.appendChild(option);
-    });
-
-    const activeBoard = state.boards.find((board) => board.id === state.activeBoardId);
-    boardNameInput.value = activeBoard ? activeBoard.name : "";
-    const disableBoardRemoval = state.boards.length <= 1;
-    deleteBoardButton.disabled = disableBoardRemoval;
-    duplicateBoardButton.disabled = !state.boards.length;
-    boardNameInput.disabled = !state.boards.length;
-    boardSelect.disabled = !state.boards.length;
-  }
-
   function escapeAttribute(value = "") {
     return value
       .replace(/&/g, "&amp;")
@@ -166,13 +164,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function persistMenu(shouldRerender = false) {
     skipNextRender = true;
-    menu = window.MenuData.saveMenu(menu, activeBoardId);
+    menu = window.MenuData.saveMenu(menu, activeBoardId, { restaurantId: activeRestaurantId });
     skipNextRender = false;
     if (shouldRerender) {
       renderSections();
     }
   }
 
+  function buildDisplayLink(restaurantId) {
+    const displayUrl = new URL("./index.html", window.location.href);
+    displayUrl.search = "";
+    if (restaurantId) {
+      displayUrl.searchParams.set("restaurant", restaurantId);
+    }
+    return displayUrl.toString();
+  }
+
+  function copyDisplayLink() {
+    const link = restaurantDisplayLinkInput.value;
+    if (!link) {
+      return;
+    }
+    const originalText = copyDisplayLinkButton.textContent;
+    const acknowledge = () => {
+      copyDisplayLinkButton.textContent = "Copied!";
+      setTimeout(() => {
+        copyDisplayLinkButton.textContent = originalText;
+      }, 1500);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(acknowledge).catch(() => {
+        restaurantDisplayLinkInput.focus();
+        restaurantDisplayLinkInput.select();
+        document.execCommand("copy");
+        acknowledge();
+      });
+    } else {
+      restaurantDisplayLinkInput.focus();
+      restaurantDisplayLinkInput.select();
+      document.execCommand("copy");
+      acknowledge();
+    }
   function ensureBackgroundState() {
     if (!Array.isArray(menu.backgrounds)) {
       menu.backgrounds = [];
@@ -405,7 +438,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirm("Reset menu to defaults?")) {
       return;
     }
-    menu = window.MenuData.resetMenu(activeBoardId);
+    menu = window.MenuData.resetMenu(activeBoardId, { restaurantId: activeRestaurantId });
     renderSections();
   });
 
@@ -438,6 +471,8 @@ document.addEventListener("DOMContentLoaded", () => {
     loadRestaurantContext(activeRestaurantId);
   });
 
+  copyDisplayLinkButton.addEventListener("click", copyDisplayLink);
+
   titleInput.addEventListener("input", (event) => {
     menu.title = event.target.value;
     persistMenu();
@@ -448,6 +483,40 @@ document.addEventListener("DOMContentLoaded", () => {
     persistMenu();
   });
 
+  boardSelect.addEventListener("change", (event) => {
+    const boardId = event.target.value;
+    activeBoardId = boardId;
+    window.MenuData.setActiveBoard(boardId, { restaurantId: activeRestaurantId });
+    menu = window.MenuData.getMenu(boardId, { restaurantId: activeRestaurantId });
+    renderSections();
+    subscribeToMenu(boardId, activeRestaurantId);
+  });
+
+  boardNameInput.addEventListener("change", (event) => {
+    window.MenuData.renameBoard(activeBoardId, event.target.value, { restaurantId: activeRestaurantId });
+  });
+
+  addBoardButton.addEventListener("click", () => {
+    const newBoard = window.MenuData.createBoard({ restaurantId: activeRestaurantId });
+    activeBoardId = newBoard.id;
+    menu = window.MenuData.getMenu(activeBoardId, { restaurantId: activeRestaurantId });
+    renderSections();
+    subscribeToMenu(activeBoardId, activeRestaurantId);
+  });
+
+  duplicateBoardButton.addEventListener("click", () => {
+    const duplicateBoard = window.MenuData.createBoard({
+      sourceBoardId: activeBoardId,
+      restaurantId: activeRestaurantId
+    });
+    activeBoardId = duplicateBoard.id;
+    menu = window.MenuData.getMenu(activeBoardId, { restaurantId: activeRestaurantId });
+    renderSections();
+    subscribeToMenu(activeBoardId, activeRestaurantId);
+  });
+
+  deleteBoardButton.addEventListener("click", () => {
+    if (!confirm("Delete this board?")) {
   addBackgroundUrlButton.addEventListener("click", () => {
     const source = backgroundUrlInput.value.trim();
     if (!source) {
@@ -520,6 +589,18 @@ document.addEventListener("DOMContentLoaded", () => {
     menu = window.MenuData.getMenu(activeBoardId, { restaurantId: activeRestaurantId });
     renderSections();
     subscribeToMenu(activeBoardId, activeRestaurantId);
+  });
+
+  renderRestaurantControls(restaurantsState);
+  loadRestaurantContext(activeRestaurantId);
+
+  unsubscribeRestaurants = window.MenuData.subscribeRestaurants((state) => {
+    const previousRestaurantId = currentRestaurantId;
+    renderRestaurantControls(state);
+    if (state.activeRestaurantId !== previousRestaurantId) {
+      loadRestaurantContext(state.activeRestaurantId);
+    }
+  });
   });
 
   window.MenuData.subscribeBoards(renderBoardControls);
