@@ -20,6 +20,23 @@
       </header>
       <main>
         <form id="menu-form" autocomplete="off">
+          <section class="board-manager">
+            <div class="board-manager__row">
+              <label class="form-field board-manager__select">
+                <span>Menu board</span>
+                <select data-board-select></select>
+              </label>
+              <button type="button" data-add-board>Add board</button>
+              <button type="button" data-duplicate-board class="ghost">Duplicate board</button>
+            </div>
+            <label class="form-field">
+              <span>Board name</span>
+              <input type="text" data-board-name-input placeholder="e.g. Brunch Board" />
+            </label>
+            <div class="board-manager__row board-manager__row--end">
+              <button type="button" data-delete-board class="danger">Delete board</button>
+            </div>
+          </section>
           <label class="form-field">
             <span>Menu title</span>
             <input type="text" data-menu-title-input placeholder="Menu title" />

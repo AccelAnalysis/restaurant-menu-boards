@@ -36,6 +36,10 @@
     return JSON.parse(JSON.stringify(object));
   }
 
+  function generateId() {
+    return "board-" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  }
+
   function normalizeItem(item = {}) {
     return {
       name: typeof item.name === "string" ? item.name : "Unnamed Item",
@@ -187,13 +191,49 @@
       memoryMenu = normalizeMenu(window.DEFAULT_MENU);
       lastSerializedMenu = JSON.stringify(memoryMenu);
     }
-    return memoryMenu;
+
+    // Handle legacy single menu objects
+    if (!Array.isArray(state.boards)) {
+      const legacyBoard = createBoardFromMenu(state, state.title || "Main Board");
+      return { boards: [legacyBoard], activeBoardId: legacyBoard.id };
+    }
+
+    const boards = state.boards
+      .map((board, index) => {
+        if (!board || typeof board !== "object") {
+          return null;
+        }
+        const id = typeof board.id === "string" ? board.id : generateId() + index;
+        const name = typeof board.name === "string" && board.name.trim()
+          ? board.name
+          : `Board ${index + 1}`;
+        const menu = normalizeMenu(board.menu);
+        return { id, name, menu };
+      })
+      .filter(Boolean);
+
+    if (!boards.length) {
+      boards.push(fallbackBoard);
+    }
+
+    const activeBoardId = boards.some((board) => board.id === state.activeBoardId)
+      ? state.activeBoardId
+      : boards[0].id;
+
+    return { boards, activeBoardId };
+  }
+
+  function ensureMemoryState() {
+    if (!memoryState) {
+      memoryState = normalizeBoardsState({});
+    }
+    return memoryState;
   }
 
   function readFromStorage() {
     const raw = safeGetItem(STORAGE_KEY);
     if (!raw) {
-      return ensureMemoryMenu();
+      return ensureMemoryState();
     }
 
     try {
@@ -203,23 +243,45 @@
     } catch (error) {
       console.warn("Unable to parse stored menu data. Falling back to defaults.", error);
       safeRemoveItem(STORAGE_KEY);
-      return ensureMemoryMenu();
+      return ensureMemoryState();
     }
   }
 
-  function getMenu() {
-    if (!cachedMenu) {
-      cachedMenu = readFromStorage();
+  function getState() {
+    if (!cachedState) {
+      cachedState = readFromStorage();
     }
-
-    return clone(cachedMenu);
+    return clone(cachedState);
   }
 
-  function notifyListeners() {
-    const snapshot = getMenu();
-    listeners.forEach((listener) => {
+  function getMenu(boardId) {
+    const state = getState();
+    const targetBoard = boardId
+      ? state.boards.find((board) => board.id === boardId)
+      : state.boards.find((board) => board.id === state.activeBoardId);
+    const fallbackBoard = state.boards[0];
+    return clone((targetBoard || fallbackBoard).menu);
+  }
+
+  function getBoards(options = {}) {
+    const { withMenus = false } = options;
+    const state = getState();
+    return {
+      activeBoardId: state.activeBoardId,
+      boards: state.boards.map((board) => {
+        const payload = { id: board.id, name: board.name };
+        if (withMenus) {
+          payload.menu = clone(board.menu);
+        }
+        return payload;
+      })
+    };
+  }
+
+  function notifyMenuListeners() {
+    menuListeners.forEach((listener) => {
       try {
-        listener(snapshot);
+        listener.callback(getMenu(listener.boardId));
       } catch (error) {
         console.error("Menu listener failed", error);
       }
@@ -255,13 +317,22 @@
     return getMenu();
   }
 
-  function subscribe(listener) {
+  function subscribe(listener, options = {}) {
     if (typeof listener !== "function") {
       return () => {};
     }
 
-    listeners.add(listener);
-    return () => listeners.delete(listener);
+    const entry = { callback: listener, boardId: options.boardId || null };
+    menuListeners.add(entry);
+    return () => menuListeners.delete(entry);
+  }
+
+  function subscribeBoards(listener) {
+    if (typeof listener !== "function") {
+      return () => {};
+    }
+    boardListeners.add(listener);
+    return () => boardListeners.delete(listener);
   }
 
   function appendQuery(url, queryString) {
@@ -447,8 +518,9 @@
 
   window.addEventListener("storage", (event) => {
     if (event.key === STORAGE_KEY) {
-      cachedMenu = null;
-      notifyListeners();
+      cachedState = null;
+      notifyMenuListeners();
+      notifyBoardListeners();
     }
   });
 })();

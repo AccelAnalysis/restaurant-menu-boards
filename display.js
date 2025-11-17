@@ -10,6 +10,22 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  const boardState = window.MenuData.getBoards();
+  const params = new URLSearchParams(window.location.search);
+  const requestedBoardId = params.get("board");
+  let displayBoardId = boardState.boards.some((board) => board.id === requestedBoardId)
+    ? requestedBoardId
+    : boardState.activeBoardId;
+  let unsubscribeMenu = null;
+
+  function updateBoardLabel(state = window.MenuData.getBoards()) {
+    if (!boardLabelElement) {
+      return;
+    }
+    const board = state.boards.find((entry) => entry.id === displayBoardId);
+    boardLabelElement.textContent = board ? board.name : "";
+  }
+
   function formatTimestamp() {
     const date = new Date();
     return date.toLocaleString(undefined, {

@@ -24,8 +24,34 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  let menu = window.MenuData.getMenu();
+  let boardsState = window.MenuData.getBoards();
+  let activeBoardId = boardsState.activeBoardId;
+  let menu = window.MenuData.getMenu(activeBoardId);
   let skipNextRender = false;
+
+  function renderBoardControls(state = window.MenuData.getBoards()) {
+    boardsState = state;
+    activeBoardId = state.activeBoardId;
+
+    boardSelect.innerHTML = "";
+    state.boards.forEach((board) => {
+      const option = document.createElement("option");
+      option.value = board.id;
+      option.textContent = board.name;
+      if (board.id === state.activeBoardId) {
+        option.selected = true;
+      }
+      boardSelect.appendChild(option);
+    });
+
+    const activeBoard = state.boards.find((board) => board.id === state.activeBoardId);
+    boardNameInput.value = activeBoard ? activeBoard.name : "";
+    const disableBoardRemoval = state.boards.length <= 1;
+    deleteBoardButton.disabled = disableBoardRemoval;
+    duplicateBoardButton.disabled = !state.boards.length;
+    boardNameInput.disabled = !state.boards.length;
+    boardSelect.disabled = !state.boards.length;
+  }
 
   function escapeAttribute(value = "") {
     return value
@@ -37,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function persistMenu(shouldRerender = false) {
     skipNextRender = true;
-    menu = window.MenuData.saveMenu(menu);
+    menu = window.MenuData.saveMenu(menu, activeBoardId);
     skipNextRender = false;
     if (shouldRerender) {
       renderSections();
@@ -276,7 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirm("Reset menu to defaults?")) {
       return;
     }
-    menu = window.MenuData.resetMenu();
+    menu = window.MenuData.resetMenu(activeBoardId);
     renderSections();
   });
 
@@ -360,6 +386,46 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSections();
   });
 
+  window.MenuData.subscribeBoards(renderBoardControls);
+
+  boardSelect.addEventListener("change", (event) => {
+    const boardId = event.target.value;
+    activeBoardId = boardId;
+    window.MenuData.setActiveBoard(boardId);
+    menu = window.MenuData.getMenu(boardId);
+    renderSections();
+  });
+
+  boardNameInput.addEventListener("change", (event) => {
+    window.MenuData.renameBoard(activeBoardId, event.target.value);
+  });
+
+  addBoardButton.addEventListener("click", () => {
+    const newBoard = window.MenuData.createBoard();
+    activeBoardId = newBoard.id;
+    menu = window.MenuData.getMenu(activeBoardId);
+    renderSections();
+  });
+
+  duplicateBoardButton.addEventListener("click", () => {
+    const duplicateBoard = window.MenuData.createBoard({ sourceBoardId: activeBoardId });
+    activeBoardId = duplicateBoard.id;
+    menu = window.MenuData.getMenu(activeBoardId);
+    renderSections();
+  });
+
+  deleteBoardButton.addEventListener("click", () => {
+    if (!confirm("Delete this board?")) {
+      return;
+    }
+    window.MenuData.deleteBoard(activeBoardId);
+    const updatedState = window.MenuData.getBoards();
+    activeBoardId = updatedState.activeBoardId;
+    menu = window.MenuData.getMenu(activeBoardId);
+    renderSections();
+  });
+
+  renderBoardControls(boardsState);
   renderSections();
   if (typeof window.MenuData.syncNow === "function") {
     window.MenuData.syncNow();
