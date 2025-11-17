@@ -2,6 +2,7 @@
   const STORAGE_KEY = "restaurant-menu-boards";
   const menuListeners = new Set();
   const boardListeners = new Set();
+  const restaurantListeners = new Set();
   let cachedState = null;
   let memoryState = null;
   let lastSerializedState = null;
@@ -39,6 +40,10 @@
 
   function generateId() {
     return "board-" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  }
+
+  function generateRestaurantId() {
+    return "restaurant-" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
   }
 
   function normalizeItem(item = {}) {
@@ -188,6 +193,79 @@
     return { boards, activeBoardId };
   }
 
+  function createRestaurantFromBoardState(boardState, name, id) {
+    const label = typeof name === "string" && name.trim() ? name.trim() : "Restaurant";
+    const restaurantId = typeof id === "string" && id.trim() ? id.trim() : generateRestaurantId();
+    return {
+      id: restaurantId,
+      name: label,
+      boards: boardState.boards,
+      activeBoardId: boardState.activeBoardId
+    };
+  }
+
+  function normalizeRestaurant(restaurant = {}, index = 0) {
+    if (!restaurant || typeof restaurant !== "object") {
+      return null;
+    }
+
+    const id =
+      typeof restaurant.id === "string" && restaurant.id.trim()
+        ? restaurant.id.trim()
+        : generateRestaurantId();
+
+    const name =
+      typeof restaurant.name === "string" && restaurant.name.trim()
+        ? restaurant.name.trim()
+        : `Restaurant ${index + 1}`;
+
+    const boardSource = Array.isArray(restaurant.boards)
+      ? { boards: restaurant.boards, activeBoardId: restaurant.activeBoardId }
+      : restaurant;
+
+    const normalizedBoards = normalizeBoardsState(boardSource);
+
+    return {
+      id,
+      name,
+      boards: normalizedBoards.boards,
+      activeBoardId: normalizedBoards.activeBoardId
+    };
+  }
+
+  function normalizeRestaurantsState(state = {}) {
+    let restaurants = [];
+
+    if (Array.isArray(state.restaurants) && state.restaurants.length) {
+      restaurants = state.restaurants.map(normalizeRestaurant).filter(Boolean);
+    } else {
+      const legacyBoardsState = normalizeBoardsState(state);
+      restaurants = [
+        createRestaurantFromBoardState(
+          legacyBoardsState,
+          state.restaurantName || state.name || "Main Restaurant",
+          state.restaurantId || state.id
+        )
+      ];
+    }
+
+    if (!restaurants.length) {
+      const fallbackBoard = createBoardFromMenu(window.DEFAULT_MENU, "Main Board");
+      restaurants.push({
+        id: generateRestaurantId(),
+        name: "Restaurant",
+        boards: [fallbackBoard],
+        activeBoardId: fallbackBoard.id
+      });
+    }
+
+    const activeRestaurantId = restaurants.some((restaurant) => restaurant.id === state.activeRestaurantId)
+      ? state.activeRestaurantId
+      : restaurants[0].id;
+
+    return { restaurants, activeRestaurantId };
+  }
+
   function disableStorage(error) {
     if (!storageEnabled) return;
     storageEnabled = false;
@@ -235,7 +313,7 @@
 
   function ensureMemoryState() {
     if (!memoryState) {
-      memoryState = normalizeBoardsState({});
+      memoryState = normalizeRestaurantsState({});
       lastSerializedState = JSON.stringify(memoryState);
     }
     return memoryState;
@@ -248,7 +326,7 @@
     }
 
     try {
-      const parsed = normalizeBoardsState(JSON.parse(raw));
+      const parsed = normalizeRestaurantsState(JSON.parse(raw));
       lastSerializedState = JSON.stringify(parsed);
       return parsed;
     } catch (error) {
@@ -265,15 +343,36 @@
     return clone(cachedState);
   }
 
-  function resolveBoardId(state, requestedId) {
-    if (requestedId && state.boards.some((board) => board.id === requestedId)) {
+  function resolveRestaurantId(state, requestedId) {
+    if (requestedId && state.restaurants.some((restaurant) => restaurant.id === requestedId)) {
       return requestedId;
     }
-    return state.activeBoardId;
+    return state.activeRestaurantId;
+  }
+
+  function getRestaurantById(state, requestedId) {
+    const restaurantId = resolveRestaurantId(state, requestedId);
+    return (
+      state.restaurants.find((restaurant) => restaurant.id === restaurantId) || state.restaurants[0]
+    );
+  }
+
+  function resolveBoardId(restaurant, requestedId) {
+    if (requestedId && restaurant.boards.some((board) => board.id === requestedId)) {
+      return requestedId;
+    }
+    return restaurant.activeBoardId;
+  }
+
+  function resolveBoardContext(state, options = {}) {
+    const restaurant = getRestaurantById(state, options.restaurantId);
+    const boardId = resolveBoardId(restaurant, options.boardId);
+    const board = restaurant.boards.find((entry) => entry.id === boardId) || restaurant.boards[0];
+    return { restaurant, board, boardId };
   }
 
   function commitState(nextState) {
-    const normalized = normalizeBoardsState(nextState);
+    const normalized = normalizeRestaurantsState(nextState);
     const serialized = JSON.stringify(normalized);
     cachedState = clone(normalized);
     memoryState = normalized;
@@ -281,6 +380,7 @@
     safeSetItem(STORAGE_KEY, serialized);
     notifyBoardListeners();
     notifyMenuListeners();
+    notifyRestaurantListeners();
     if (remoteEnabled) {
       remoteSaveState(normalized).catch((error) => {
         console.error("Unable to save menu to Google Sheets", error);
@@ -289,19 +389,21 @@
     return getState();
   }
 
-  function getMenu(boardId) {
+  function getMenu(boardId, restaurantId) {
     const state = getState();
-    const targetBoardId = resolveBoardId(state, boardId);
-    const targetBoard = state.boards.find((board) => board.id === targetBoardId) || state.boards[0];
-    return clone(targetBoard.menu);
+    const { board } = resolveBoardContext(state, { boardId, restaurantId });
+    return clone(board.menu);
   }
 
   function getBoards(options = {}) {
-    const { withMenus = false } = options;
+    const { restaurantId, withMenus = false } = options;
     const state = getState();
+    const restaurant = getRestaurantById(state, restaurantId);
     return {
-      activeBoardId: state.activeBoardId,
-      boards: state.boards.map((board) => {
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      activeBoardId: restaurant.activeBoardId,
+      boards: restaurant.boards.map((board) => {
         const payload = { id: board.id, name: board.name };
         if (withMenus) {
           payload.menu = clone(board.menu);
@@ -311,69 +413,224 @@
     };
   }
 
-  function saveMenu(menu, boardId) {
+  function saveMenu(menu, boardId, restaurantId) {
     const normalizedMenu = normalizeMenu(menu);
     const state = getState();
-    const targetBoardId = resolveBoardId(state, boardId);
-    const boards = state.boards.map((board) =>
-      board.id === targetBoardId ? { ...board, menu: normalizedMenu } : board
+    const { restaurant, boardId: targetBoardId } = resolveBoardContext(state, {
+      boardId,
+      restaurantId
+    });
+
+    const updatedRestaurant = {
+      ...restaurant,
+      boards: restaurant.boards.map((board) =>
+        board.id === targetBoardId ? { ...board, menu: normalizedMenu } : board
+      )
+    };
+    const restaurants = state.restaurants.map((entry) =>
+      entry.id === restaurant.id ? updatedRestaurant : entry
     );
-    commitState({ ...state, boards });
-    return getMenu(targetBoardId);
+    commitState({ ...state, restaurants });
+    return getMenu(targetBoardId, restaurant.id);
   }
 
-  function resetMenu(boardId) {
-    return saveMenu(window.DEFAULT_MENU, boardId);
+  function resetMenu(boardId, restaurantId) {
+    return saveMenu(window.DEFAULT_MENU, boardId, restaurantId);
   }
 
-  function setActiveBoard(boardId) {
+  function setActiveBoard(boardId, restaurantId) {
     const state = getState();
-    if (!state.boards.some((board) => board.id === boardId)) {
+    const restaurant = getRestaurantById(state, restaurantId);
+    if (!restaurant.boards.some((board) => board.id === boardId)) {
       return state;
     }
-    if (state.activeBoardId === boardId) {
+    if (restaurant.activeBoardId === boardId) {
       return state;
     }
-    return commitState({ ...state, activeBoardId: boardId });
+    const updatedRestaurant = { ...restaurant, activeBoardId: boardId };
+    const restaurants = state.restaurants.map((entry) =>
+      entry.id === restaurant.id ? updatedRestaurant : entry
+    );
+    return commitState({ ...state, restaurants });
   }
 
-  function renameBoard(boardId, name) {
+  function renameBoard(boardId, name, restaurantId) {
     const trimmed = typeof name === "string" ? name.trim() : "";
     const state = getState();
-    const boards = state.boards.map((board) =>
-      board.id === boardId && trimmed ? { ...board, name: trimmed } : board
+    const restaurant = getRestaurantById(state, restaurantId);
+    const updatedRestaurant = {
+      ...restaurant,
+      boards: restaurant.boards.map((board) =>
+        board.id === boardId && trimmed ? { ...board, name: trimmed } : board
+      )
+    };
+    const restaurants = state.restaurants.map((entry) =>
+      entry.id === restaurant.id ? updatedRestaurant : entry
     );
-    commitState({ ...state, boards });
+    commitState({ ...state, restaurants });
   }
 
   function createBoard(options = {}) {
     const state = getState();
+    const restaurant = getRestaurantById(state, options.restaurantId);
     const sourceBoard = options.sourceBoardId
-      ? state.boards.find((board) => board.id === options.sourceBoardId)
+      ? restaurant.boards.find((board) => board.id === options.sourceBoardId)
       : null;
     const name =
       typeof options.name === "string" && options.name.trim()
         ? options.name.trim()
         : sourceBoard
           ? `${sourceBoard.name} Copy`
-          : `Board ${state.boards.length + 1}`;
+          : `Board ${restaurant.boards.length + 1}`;
     const menu = sourceBoard ? clone(sourceBoard.menu) : normalizeMenu(window.DEFAULT_MENU);
     const newBoard = { id: generateId(), name, menu };
-    commitState({ boards: [...state.boards, newBoard], activeBoardId: newBoard.id });
+    const updatedRestaurant = {
+      ...restaurant,
+      boards: [...restaurant.boards, newBoard],
+      activeBoardId: newBoard.id
+    };
+    const restaurants = state.restaurants.map((entry) =>
+      entry.id === restaurant.id ? updatedRestaurant : entry
+    );
+    commitState({ ...state, restaurants });
     return newBoard;
   }
 
-  function deleteBoard(boardId) {
+  function deleteBoard(boardId, restaurantId) {
     const state = getState();
-    if (state.boards.length <= 1) {
-      const fallback = createBoardFromMenu(window.DEFAULT_MENU, "Main Board", state.boards[0].id);
-      return commitState({ boards: [fallback], activeBoardId: fallback.id });
+    const restaurant = getRestaurantById(state, restaurantId);
+    if (restaurant.boards.length <= 1) {
+      const fallback = createBoardFromMenu(
+        window.DEFAULT_MENU,
+        "Main Board",
+        restaurant.boards[0].id
+      );
+      const updatedRestaurant = {
+        ...restaurant,
+        boards: [fallback],
+        activeBoardId: fallback.id
+      };
+      const restaurants = state.restaurants.map((entry) =>
+        entry.id === restaurant.id ? updatedRestaurant : entry
+      );
+      return commitState({ ...state, restaurants });
     }
 
-    const targetBoardId = resolveBoardId(state, boardId);
-    const boards = state.boards.filter((board) => board.id !== targetBoardId);
-    const activeBoardId = state.activeBoardId === targetBoardId ? boards[0].id : state.activeBoardId;
-    return commitState({ boards, activeBoardId });
+    const targetBoardId = resolveBoardId(restaurant, boardId);
+    const boards = restaurant.boards.filter((board) => board.id !== targetBoardId);
+    const activeBoardId =
+      restaurant.activeBoardId === targetBoardId ? boards[0].id : restaurant.activeBoardId;
+    const updatedRestaurant = { ...restaurant, boards, activeBoardId };
+    const restaurants = state.restaurants.map((entry) =>
+      entry.id === restaurant.id ? updatedRestaurant : entry
+    );
+    return commitState({ ...state, restaurants });
+  }
+
+  function getRestaurants(options = {}) {
+    const { withBoards = false, withMenus = false } = options;
+    const state = getState();
+    return {
+      activeRestaurantId: state.activeRestaurantId,
+      restaurants: state.restaurants.map((restaurant) => {
+        const payload = {
+          id: restaurant.id,
+          name: restaurant.name,
+          boardCount: restaurant.boards.length,
+          activeBoardId: restaurant.activeBoardId
+        };
+        if (withBoards) {
+          payload.boards = restaurant.boards.map((board) => {
+            const boardPayload = { id: board.id, name: board.name };
+            if (withMenus) {
+              boardPayload.menu = clone(board.menu);
+            }
+            return boardPayload;
+          });
+        }
+        return payload;
+      })
+    };
+  }
+
+  function setActiveRestaurant(restaurantId) {
+    const state = getState();
+    if (!state.restaurants.some((restaurant) => restaurant.id === restaurantId)) {
+      return state;
+    }
+    if (state.activeRestaurantId === restaurantId) {
+      return state;
+    }
+    return commitState({ ...state, activeRestaurantId: restaurantId });
+  }
+
+  function renameRestaurant(restaurantId, name) {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    const state = getState();
+    const restaurants = state.restaurants.map((restaurant) =>
+      restaurant.id === restaurantId && trimmed ? { ...restaurant, name: trimmed } : restaurant
+    );
+    commitState({ ...state, restaurants });
+  }
+
+  function createRestaurant(options = {}) {
+    const state = getState();
+    const sourceRestaurant = options.sourceRestaurantId
+      ? state.restaurants.find((restaurant) => restaurant.id === options.sourceRestaurantId)
+      : null;
+    const trimmedName = typeof options.name === "string" ? options.name.trim() : "";
+    const name = trimmedName
+      ? trimmedName
+      : sourceRestaurant
+        ? `${sourceRestaurant.name} Copy`
+        : `Restaurant ${state.restaurants.length + 1}`;
+
+    let boards = [];
+    if (sourceRestaurant) {
+      boards = sourceRestaurant.boards.map((board, index) => ({
+        id: generateId(),
+        name: board.name || `Board ${index + 1}`,
+        menu: clone(board.menu)
+      }));
+    } else {
+      boards = [createBoardFromMenu(window.DEFAULT_MENU, "Main Board")];
+    }
+
+    if (!boards.length) {
+      boards.push(createBoardFromMenu(window.DEFAULT_MENU, "Main Board"));
+    }
+
+    const activeBoardId = boards[0].id;
+    const newRestaurant = {
+      id: generateRestaurantId(),
+      name,
+      boards,
+      activeBoardId
+    };
+
+    const restaurants = [...state.restaurants, newRestaurant];
+    commitState({ restaurants, activeRestaurantId: newRestaurant.id });
+    return newRestaurant;
+  }
+
+  function deleteRestaurant(restaurantId) {
+    const state = getState();
+    if (state.restaurants.length <= 1) {
+      const fallbackBoard = createBoardFromMenu(window.DEFAULT_MENU, "Main Board");
+      const fallbackRestaurant = {
+        id: state.restaurants[0]?.id || generateRestaurantId(),
+        name: state.restaurants[0]?.name || "Restaurant",
+        boards: [fallbackBoard],
+        activeBoardId: fallbackBoard.id
+      };
+      return commitState({ restaurants: [fallbackRestaurant], activeRestaurantId: fallbackRestaurant.id });
+    }
+
+    const targetRestaurantId = resolveRestaurantId(state, restaurantId);
+    const restaurants = state.restaurants.filter((restaurant) => restaurant.id !== targetRestaurantId);
+    const activeRestaurantId =
+      state.activeRestaurantId === targetRestaurantId ? restaurants[0].id : state.activeRestaurantId;
+    return commitState({ restaurants, activeRestaurantId });
   }
 
   function subscribe(listener, options = {}) {
@@ -381,17 +638,61 @@
       return () => {};
     }
 
-    const entry = { callback: listener, boardId: options.boardId || null };
+    const entry = {
+      callback: listener,
+      boardId: options.boardId || null,
+      restaurantId: options.restaurantId || null
+    };
     menuListeners.add(entry);
     return () => menuListeners.delete(entry);
   }
 
-  function subscribeBoards(listener) {
+  function subscribeBoards(listener, options = {}) {
     if (typeof listener !== "function") {
       return () => {};
     }
-    boardListeners.add(listener);
-    return () => boardListeners.delete(listener);
+    const entry = { callback: listener, restaurantId: options.restaurantId || null };
+    boardListeners.add(entry);
+    return () => boardListeners.delete(entry);
+  }
+
+  function subscribeRestaurants(listener) {
+    if (typeof listener !== "function") {
+      return () => {};
+    }
+    restaurantListeners.add(listener);
+    return () => restaurantListeners.delete(listener);
+  }
+
+  function notifyMenuListeners() {
+    menuListeners.forEach((listener) => {
+      try {
+        listener.callback(getMenu(listener.boardId, listener.restaurantId));
+      } catch (error) {
+        console.error("Menu listener failed", error);
+      }
+    });
+  }
+
+  function notifyBoardListeners() {
+    boardListeners.forEach((listener) => {
+      try {
+        listener.callback(getBoards({ restaurantId: listener.restaurantId }));
+      } catch (error) {
+        console.error("Board listener failed", error);
+      }
+    });
+  }
+
+  function notifyRestaurantListeners() {
+    const snapshot = getRestaurants();
+    restaurantListeners.forEach((listener) => {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.error("Restaurant listener failed", error);
+      }
+    });
   }
 
   function notifyMenuListeners() {
@@ -499,7 +800,7 @@
       if (!response.ok) {
         throw new Error(`Google Sheets fetch failed: ${response.status} ${text}`);
       }
-      return normalizeBoardsState(extractPayload(parseRemoteJson(text)) || {});
+      return normalizeRestaurantsState(extractPayload(parseRemoteJson(text)) || {});
     } finally {
       if (timer) {
         clearTimeout(timer);
@@ -533,7 +834,7 @@
       if (!response.ok) {
         throw new Error(`Google Sheets save failed: ${response.status} ${text}`);
       }
-      return normalizeBoardsState(extractPayload(parseRemoteJson(text)) || {});
+      return normalizeRestaurantsState(extractPayload(parseRemoteJson(text)) || {});
     } finally {
       if (timer) {
         clearTimeout(timer);
@@ -563,6 +864,7 @@
           safeSetItem(STORAGE_KEY, serialized);
           notifyBoardListeners();
           notifyMenuListeners();
+          notifyRestaurantListeners();
         }
         return remoteStatePayload;
       })
@@ -596,11 +898,17 @@
     resetMenu,
     subscribe,
     subscribeBoards,
+    subscribeRestaurants,
     getBoards,
     setActiveBoard,
     createBoard,
     deleteBoard,
     renameBoard,
+    getRestaurants,
+    setActiveRestaurant,
+    createRestaurant,
+    deleteRestaurant,
+    renameRestaurant,
     syncNow: () => syncFromRemote({ force: true })
   };
 
@@ -609,6 +917,7 @@
       cachedState = null;
       notifyBoardListeners();
       notifyMenuListeners();
+      notifyRestaurantListeners();
     }
   });
 })();
