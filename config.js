@@ -53,14 +53,14 @@ window.DEFAULT_MENU = {
 
 window.MENU_SHEETS_CONFIG = {
   // ─── REQUIRED: Google Apps Script Web App URL (deployed from Code.gs) ───
-  endpoint: "", // ← PASTE YOUR DEPLOYED WEB APP URL HERE (e.g. https://script.google.com/macros/s/ABC123/exec)
+  endpoint: "https://script.google.com/macros/s/AKfycbz4rBaKb9IUhopuMGLHEZxbxj2HqqB2LE3R8XIIRFfWqNOiQUksg_gOz79CZQbtEPtg/exec", // ← PASTE YOUR DEPLOYED WEB APP URL HERE (e.g. https://script.google.com/macros/s/ABC123/exec)
 
   // ─── ADMIN TOKEN (protects writes from unauthorized admins) ───
-  token: "replace-with-very-strong-random-string-2025",   // ← CHANGE THIS!
+  token: "90210-rAxfyg-5zokpu-ceqpyb",   // ← CHANGE THIS!
 
   // ─── DISPLAY SECRET KEY (protects public Fire Stick URLs from guessing) ───
   // Any display URL without this exact key will show "Invalid display key"
-  displayKey: "firestick-secure-key-2025-restaurant-chain", // ← CHANGE THIS!
+  displayKey: "rAxfyg-5zokpu-ceqpyb-23314", // ← CHANGE THIS!
 
   // ─── SYNC BEHAVIOR (optimized for 24/7 Fire Stick displays) ───
   pollInterval: 10000,    // Check for updates every 10 seconds
@@ -69,7 +69,7 @@ window.MENU_SHEETS_CONFIG = {
   // ─── AUTO-ROTATION SETTINGS (prevents screen burn-in) ───
   autoRotate: {
     enabled: true,
-    intervalMs: 6 * 60 * 1000,        // 6 minutes per board (adjustable per restaurant in future)
+    intervalMs: 2 * 60 * 1000,        // 2 minutes per board (adjustable per restaurant in future)
     randomizeOrder: false             // Set true for random board order
   },
 
@@ -86,8 +86,8 @@ window.MENU_SHEETS_CONFIG = {
 
 // Example staging override:
 // if (window.location.hostname === "staging.mymenuboards.com") {
-//   window.MENU_SHEETS_CONFIG.endpoint = "https://script.google.com/macros/s/STAGING123/exec";
-//   window.MENU_SHEETS_CONFIG.displayKey = "staging-firestick-key-2025";
+//   window.MENU_SHEETS_CONFIG.endpoint = "https://script.google.com/macros/s/AKfycbz4rBaKb9IUhopuMGLHEZxbxj2HqqB2LE3R8XIIRFfWqNOiQUksg_gOz79CZQbtEPtg/exec";
+//   window.MENU_SHEETS_CONFIG.displayKey = "90210-rAxfyg-5zokpu-ceqpyb";
 // }
 
-console.log("%c Restaurant Menu Boards v2.0 (November 2025) – Secure & Auto-Rotating", "background:#f97316;color:white;font-size:14px;padding:8px 16px;border-radius:8px;");
+console.log("%c AccelMenus v2.0 (November 2025) – Secure & Auto-Rotating", "background:#f97316;color:white;font-size:14px;padding:8px 16px;border-radius:8px;");
