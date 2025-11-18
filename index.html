@@ -2,32 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Restaurant Menu Board</title>
     <link rel="stylesheet" href="styles.css" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0f172a" />
   </head>
   <body class="menu-body">
     <div class="menu-board" data-menu-board>
       <header class="menu-header">
         <div class="menu-brand">
-          <p class="menu-tagline">Chef crafted • Made fresh daily</p>
+          <p class="menu-tagline">Fresh • Local • Daily</p>
           <p class="menu-board-label" data-board-label></p>
           <h1 class="menu-title" data-menu-title>Menu</h1>
           <p class="menu-subtitle" data-menu-subtitle></p>
         </div>
-        <div class="menu-updated" data-menu-updated></div>
+        <div class="menu-updated" data-menu-updated>Updated just now</div>
       </header>
+
       <main class="menu-sections" data-menu-sections></main>
+
       <footer class="menu-footer">
-        <p>
-          Manage items at
-          <a href="./admin.html" target="_blank" rel="noopener noreferrer"
-            >Admin Panel</a
-          >
-        </p>
+        <p>Managed remotely via secure admin console</p>
       </footer>
     </div>
-    <button class="menu-toggle" type="button" data-board-toggle aria-label="Switch menu variant"></button>
+
+    <!-- Invisible hotspot (bottom-left) to manually cycle boards if needed -->
+    <button class="menu-toggle" type="button" data-board-toggle aria-label="Next board"></button>
+
+    <!-- Load configuration and logic -->
     <script src="config.js"></script>
     <script src="shared.js"></script>
     <script src="display.js"></script>
