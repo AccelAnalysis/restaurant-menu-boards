@@ -1,83 +1,93 @@
+/**
+ * config.js
+ * Central configuration for the Remote Restaurant Menu Board System
+ * Secure defaults + auto-rotation + Fire Stick optimized
+ */
+
 window.DEFAULT_MENU = {
   title: "Sunny Side Café",
-  subtitle: "Locally roasted coffee • Freshly baked pastries",
+  subtitle: "Locally roasted coffee • Freshly baked pastries • Made with love",
   sections: [
     {
       name: "Breakfast Classics",
-      description: "Served until 11 a.m.",
+      description: "Served all day",
       items: [
-        {
-          name: "Buttermilk Pancakes",
-          description: "Whipped butter, maple syrup, seasonal fruit",
-          price: "9"
-        },
-        {
-          name: "Morning Burrito",
-          description: "Farm eggs, black beans, queso fresco, roasted salsa",
-          price: "11"
-        },
-        {
-          name: "Avocado Toast",
-          description: "Sourdough, smashed avocado, radish, chili oil",
-          price: "10"
-        }
+        { name: "Buttermilk Pancakes", description: "Whipped butter, real maple syrup, seasonal berries", price: "12.95", image: "" },
+        { name: "Avocado Toast", description: "Sourdough, smashed avocado, poтина eggs, chili oil", price: "11.95", image: "" },
+        { name: "Morning Burrito", description: "Scrambled eggs, chorizo, black beans, queso fresco", price: "13.95", image: "" }
       ]
     },
     {
       name: "Lunch Favorites",
       description: "Available after 11 a.m.",
       items: [
-        {
-          name: "Roasted Veggie Bowl",
-          description: "Ancient grains, charred broccoli, tahini herb dressing",
-          price: "13"
-        },
-        {
-          name: "Citrus Chicken Sandwich",
-          description: "Grilled chicken, pickled onion, baby greens, aioli",
-          price: "12"
-        },
-        {
-          name: "Seared Salmon Salad",
-          description: "Mixed greens, fennel, grapefruit, champagne vinaigrette",
-          price: "15"
-        }
+        { name: "Citrus Grilled Chicken Sandwich", description: "Pickled onion, arugula, herb aioli, brioche bun", price: "15.95", image: "" },
+        { name: "Quinoa Power Bowl", description: "Charred broccoli, sweet potato, tahini dressing, ancient grains", price: "14.95", image: "" },
+        { name: "Seared Salmon Salad", description: "Mixed greens, grapefruit, fennel, champagne vinaigrette", price: "18.95", image: "" }
       ]
     },
     {
       name: "Beverages",
-      description: "Available all day",
+      description: "House-made & locally sourced",
       items: [
-        { name: "Cold Brew", description: "House blend over ice", price: "5" },
-        { name: "Seasonal Latte", description: "Ask about our rotating flavors", price: "6" },
-        { name: "Fresh Lemonade", description: "Pressed lemons, sparkling water", price: "4" }
+        { name: "Cold Brew", price: "5.50", image: "" },
+        { name: "Seasonal Latte", description: "Ask about today’s rotating flavor", price: "6.50", image: "" },
+        { name: "Fresh Lemonade", price: "4.95", image: "" }
       ]
     }
   ],
   backgrounds: [
     {
-      id: "bg-sunrise",
-      name: "Sunrise Gradient",
-      source:
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
-      origin: "url"
-    },
-    {
-      id: "bg-slate",
-      name: "Slate Texture",
-      source:
-        "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1600&q=80",
+      id: "bg-default",
+      name: "Default Sunrise",
+      source: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1920&q=80",
       origin: "url"
     }
   ],
-  activeBackgroundId: "bg-sunrise"
+  activeBackgroundId: "bg-default"
 };
 
-// Configure the published Google Apps Script URL (and optional settings) that
-// backs the shared Google Sheet. Leave the endpoint empty to keep data local.
+// ─────────────────────────────────────────────────────────────────────────────
+// REMOTE SYNC & SECURITY SETTINGS (Google Apps Script backend)
+// ─────────────────────────────────────────────────────────────────────────────
+
 window.MENU_SHEETS_CONFIG = {
-  endpoint: "https://script.google.com/macros/s/AKfycbz4rBaKb9IUhopuMGLHEZxbxj2HqqB2LE3R8XIIRFfWqNOiQUksg_gOz79CZQbtEPtg/exec",
-  pollInterval: 10000,
-  token: "90210-rAxfyg-5zokpu-ceqpyb",
-  timeoutMs: 15000
+  // ─── REQUIRED: Google Apps Script Web App URL (deployed from Code.gs) ───
+  endpoint: "", // ← PASTE YOUR DEPLOYED WEB APP URL HERE (e.g. https://script.google.com/macros/s/ABC123/exec)
+
+  // ─── ADMIN TOKEN (protects writes from unauthorized admins) ───
+  token: "replace-with-very-strong-random-string-2025",   // ← CHANGE THIS!
+
+  // ─── DISPLAY SECRET KEY (protects public Fire Stick URLs from guessing) ───
+  // Any display URL without this exact key will show "Invalid display key"
+  displayKey: "firestick-secure-key-2025-restaurant-chain", // ← CHANGE THIS!
+
+  // ─── SYNC BEHAVIOR (optimized for 24/7 Fire Stick displays) ───
+  pollInterval: 10000,    // Check for updates every 10 seconds
+  timeoutMs: 15000,       // Abort stalled requests after 15s
+
+  // ─── AUTO-ROTATION SETTINGS (prevents screen burn-in) ───
+  autoRotate: {
+    enabled: true,
+    intervalMs: 6 * 60 * 1000,        // 6 minutes per board (adjustable per restaurant in future)
+    randomizeOrder: false             // Set true for random board order
+  },
+
+  // ─── ADVANCED (rarely changed) ───
+  getAction: "getMenu",
+  setAction: "setMenu",
+  method: "POST",
+  mode: "cors"
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPTIONAL: Override any setting per deployment (e.g. staging vs production)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Example staging override:
+// if (window.location.hostname === "staging.mymenuboards.com") {
+//   window.MENU_SHEETS_CONFIG.endpoint = "https://script.google.com/macros/s/STAGING123/exec";
+//   window.MENU_SHEETS_CONFIG.displayKey = "staging-firestick-key-2025";
+// }
+
+console.log("%c Restaurant Menu Boards v2.0 (November 2025) – Secure & Auto-Rotating", "background:#f97316;color:white;font-size:14px;padding:8px 16px;border-radius:8px;");
