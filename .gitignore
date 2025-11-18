@@ -1,7 +1,0 @@
-# Node / build artifacts (not needed)
-node_modules/
-dist/
-
-# Local testing
-.DS_Store
-Thumbs.db
