@@ -78,6 +78,6 @@ window.DEFAULT_MENU = {
 window.MENU_SHEETS_CONFIG = {
   endpoint: "https://script.google.com/macros/s/AKfycbwUN2Y0gg51KBj4CUdQIbNa5VjLSxZj6g8Y34Au2oP1OdSV3zaM24_f5XIh9NvmcYn8/exec ",
   pollInterval: 10000,
-  token: "",
+  token: "90210-rAxfyg-5zokpu-ceqpyb",
   timeoutMs: 15000
 };
