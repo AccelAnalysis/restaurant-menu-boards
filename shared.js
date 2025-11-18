@@ -924,6 +924,10 @@
     });
   }
 
+  function isRemoteSyncEnabled() {
+    return remoteEnabled;
+  }
+
   window.MenuData = {
     getMenu,
     saveMenu,
@@ -941,7 +945,8 @@
     createRestaurant,
     deleteRestaurant,
     renameRestaurant,
-    syncNow: () => syncFromRemote({ force: true })
+    syncNow: () => syncFromRemote({ force: true }),
+    isRemoteEnabled: isRemoteSyncEnabled
   };
 
   window.addEventListener("storage", (event) => {

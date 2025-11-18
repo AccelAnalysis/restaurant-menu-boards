@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const displayUrlInput = document.querySelector("[data-display-url]");
   const copyDisplayUrlButton = document.querySelector("[data-copy-display-url]");
   const displayUrlStatus = document.querySelector("[data-display-url-status]");
+  const displayLinkGuidance = document.querySelector("[data-display-link-guidance]");
 
   const hasRestaurantControls = Boolean(
     restaurantSelect &&
@@ -165,6 +166,25 @@ document.addEventListener("DOMContentLoaded", () => {
       setDisplayUrlStatus("Display link unavailable.", "error");
     } else {
       clearDisplayUrlStatus();
+    }
+  }
+
+  function renderDisplayLinkGuidance() {
+    if (!displayLinkGuidance) {
+      return;
+    }
+    const remoteEnabled =
+      Boolean(window.MenuData) &&
+      typeof window.MenuData.isRemoteEnabled === "function" &&
+      window.MenuData.isRemoteEnabled();
+    if (remoteEnabled) {
+      displayLinkGuidance.textContent =
+        "Your Google Sheets connection is active. Open this link on any device to load the latest menu.";
+      displayLinkGuidance.dataset.tone = "success";
+    } else {
+      displayLinkGuidance.textContent =
+        "This link only works in browsers that already have the menu saved locally. Configure MENU_SHEETS_CONFIG.endpoint in config.js to sync data through Google Sheets for remote displays.";
+      displayLinkGuidance.dataset.tone = "warning";
     }
   }
 
@@ -833,6 +853,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  renderDisplayLinkGuidance();
   renderRestaurantControls(restaurantsState);
   loadRestaurantContext(activeRestaurantId);
   if (typeof window.MenuData.subscribeRestaurants === "function") {

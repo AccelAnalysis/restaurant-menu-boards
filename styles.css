@@ -348,6 +348,24 @@ button.danger {
   color: #dc2626;
 }
 
+.display-link__notice {
+  margin: 0;
+  font-size: 0.9rem;
+  border-left: 4px solid rgba(15, 23, 42, 0.2);
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+}
+
+.display-link__notice[data-tone="warning"] {
+  border-color: #f97316;
+  color: #b45309;
+}
+
+.display-link__notice[data-tone="success"] {
+  border-color: #10b981;
+  color: #047857;
+}
+
 .board-manager__row {
   display: flex;
   gap: 0.75rem;
