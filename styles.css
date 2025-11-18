@@ -292,6 +292,80 @@ button.danger {
   gap: 0.75rem;
 }
 
+.display-link {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1.5rem;
+  background: #fff7ed;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.display-link header {
+  margin: 0;
+}
+
+.display-link h2 {
+  margin: 0.2rem 0;
+}
+
+.display-link__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.display-link__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.display-link__row input {
+  flex: 1;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  background: #fff;
+}
+
+.display-link__row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.display-link__status {
+  margin: 0;
+  min-height: 1.25em;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.display-link__status[data-tone="success"] {
+  color: #047857;
+}
+
+.display-link__status[data-tone="error"] {
+  color: #dc2626;
+}
+
+.display-link__notice {
+  margin: 0;
+  font-size: 0.9rem;
+  border-left: 4px solid rgba(15, 23, 42, 0.2);
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+}
+
+.display-link__notice[data-tone="warning"] {
+  border-color: #f97316;
+  color: #b45309;
+}
+
+.display-link__notice[data-tone="success"] {
+  border-color: #10b981;
+  color: #047857;
+}
+
 .board-manager__row {
   display: flex;
   gap: 0.75rem;

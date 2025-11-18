@@ -19,6 +19,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const addBoardButton = document.querySelector("[data-add-board]");
   const duplicateBoardButton = document.querySelector("[data-duplicate-board]");
   const deleteBoardButton = document.querySelector("[data-delete-board]");
+  const displayUrlInput = document.querySelector("[data-display-url]");
+  const copyDisplayUrlButton = document.querySelector("[data-copy-display-url]");
+  const displayUrlStatus = document.querySelector("[data-display-url-status]");
+  const displayLinkGuidance = document.querySelector("[data-display-link-guidance]");
 
   const hasRestaurantControls = Boolean(
     restaurantSelect &&
@@ -61,6 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let skipNextRender = false;
   let unsubscribeMenu = null;
   let unsubscribeBoards = null;
+  let displayUrlStatusTimeout = null;
 
   function renderRestaurantControls(state = window.MenuData.getRestaurants()) {
     restaurantsState = state;
@@ -90,6 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
     duplicateRestaurantButton.disabled = !state.restaurants.length;
     restaurantNameInput.disabled = !state.restaurants.length;
     restaurantSelect.disabled = !state.restaurants.length;
+    updateDisplayUrl();
   }
 
   function renderBoardControls(state = window.MenuData.getBoards({ restaurantId: activeRestaurantId })) {
@@ -114,6 +120,72 @@ document.addEventListener("DOMContentLoaded", () => {
     duplicateBoardButton.disabled = !state.boards.length;
     boardNameInput.disabled = !state.boards.length;
     boardSelect.disabled = !state.boards.length;
+    updateDisplayUrl();
+  }
+
+  function buildDisplayUrl(restaurantId, boardId) {
+    if (!restaurantId || !boardId) {
+      return "";
+    }
+    const url = new URL("./index.html", window.location.href);
+    url.searchParams.set("restaurant", restaurantId);
+    url.searchParams.set("board", boardId);
+    return url.toString();
+  }
+
+  function clearDisplayUrlStatus() {
+    if (!displayUrlStatus) {
+      return;
+    }
+    displayUrlStatus.textContent = "";
+    displayUrlStatus.removeAttribute("data-tone");
+  }
+
+  function setDisplayUrlStatus(message, tone = "success") {
+    if (!displayUrlStatus) {
+      return;
+    }
+    displayUrlStatus.textContent = message;
+    displayUrlStatus.dataset.tone = tone;
+    if (displayUrlStatusTimeout) {
+      clearTimeout(displayUrlStatusTimeout);
+    }
+    displayUrlStatusTimeout = window.setTimeout(() => {
+      clearDisplayUrlStatus();
+      displayUrlStatusTimeout = null;
+    }, 3000);
+  }
+
+  function updateDisplayUrl() {
+    if (!displayUrlInput) {
+      return;
+    }
+    const url = buildDisplayUrl(activeRestaurantId, activeBoardId);
+    displayUrlInput.value = url;
+    if (!url) {
+      setDisplayUrlStatus("Display link unavailable.", "error");
+    } else {
+      clearDisplayUrlStatus();
+    }
+  }
+
+  function renderDisplayLinkGuidance() {
+    if (!displayLinkGuidance) {
+      return;
+    }
+    const remoteEnabled =
+      Boolean(window.MenuData) &&
+      typeof window.MenuData.isRemoteEnabled === "function" &&
+      window.MenuData.isRemoteEnabled();
+    if (remoteEnabled) {
+      displayLinkGuidance.textContent =
+        "Your Google Sheets connection is active. Open this link on any device to load the latest menu.";
+      displayLinkGuidance.dataset.tone = "success";
+    } else {
+      displayLinkGuidance.textContent =
+        "This link only works in browsers that already have the menu saved locally. Configure MENU_SHEETS_CONFIG.endpoint in config.js to sync data through Google Sheets for remote displays.";
+      displayLinkGuidance.dataset.tone = "warning";
+    }
   }
 
   function subscribeToMenu(boardId, restaurantId) {
@@ -149,6 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSections();
     subscribeToBoards(restaurantId);
     subscribeToMenu(activeBoardId, restaurantId);
+    updateDisplayUrl();
   }
 
   function handleBoardUpdates(state) {
@@ -159,6 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
       menu = window.MenuData.getMenu(activeBoardId, activeRestaurantId);
       renderSections();
       subscribeToMenu(activeBoardId, activeRestaurantId);
+      updateDisplayUrl();
       return;
     }
     if (state.activeBoardId !== previousBoardId) {
@@ -167,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderSections();
       subscribeToMenu(activeBoardId, activeRestaurantId);
     }
+    updateDisplayUrl();
   }
 
   function handleRestaurantUpdates(state) {
@@ -700,6 +775,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu = window.MenuData.getMenu(boardId, activeRestaurantId);
     renderSections();
     subscribeToMenu(boardId, activeRestaurantId);
+    updateDisplayUrl();
   });
 
   boardNameInput.addEventListener("change", (event) => {
@@ -714,6 +790,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu = window.MenuData.getMenu(activeBoardId, activeRestaurantId);
     renderSections();
     subscribeToMenu(activeBoardId, activeRestaurantId);
+    updateDisplayUrl();
   });
 
   duplicateBoardButton.addEventListener("click", () => {
@@ -727,6 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
     menu = window.MenuData.getMenu(activeBoardId, activeRestaurantId);
     renderSections();
     subscribeToMenu(activeBoardId, activeRestaurantId);
+    updateDisplayUrl();
   });
 
   deleteBoardButton.addEventListener("click", () => {
@@ -741,8 +819,41 @@ document.addEventListener("DOMContentLoaded", () => {
     menu = window.MenuData.getMenu(activeBoardId, activeRestaurantId);
     renderSections();
     subscribeToMenu(activeBoardId, activeRestaurantId);
+    updateDisplayUrl();
   });
 
+  if (displayUrlInput) {
+    displayUrlInput.addEventListener("focus", () => {
+      displayUrlInput.select();
+    });
+  }
+
+  if (copyDisplayUrlButton && displayUrlInput) {
+    copyDisplayUrlButton.addEventListener("click", () => {
+      if (!displayUrlInput.value) {
+        setDisplayUrlStatus("Display link unavailable.", "error");
+        return;
+      }
+      const text = displayUrlInput.value;
+      const copyAction = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : new Promise((resolve, reject) => {
+            displayUrlInput.select();
+            const success = document.execCommand("copy");
+            displayUrlInput.setSelectionRange(displayUrlInput.value.length, displayUrlInput.value.length);
+            success ? resolve() : reject(new Error("Copy command failed"));
+          });
+      copyAction
+        .then(() => {
+          setDisplayUrlStatus("Link copied to clipboard.", "success");
+        })
+        .catch(() => {
+          setDisplayUrlStatus("Unable to copy link.", "error");
+        });
+    });
+  }
+
+  renderDisplayLinkGuidance();
   renderRestaurantControls(restaurantsState);
   loadRestaurantContext(activeRestaurantId);
   if (typeof window.MenuData.subscribeRestaurants === "function") {

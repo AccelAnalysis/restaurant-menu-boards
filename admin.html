@@ -54,6 +54,21 @@
               <button type="button" data-delete-board class="danger">Delete board</button>
             </div>
           </section>
+          <section class="display-link">
+            <header>
+              <p class="menu-tagline">Display link</p>
+              <h2>Share this menu board</h2>
+              <p class="display-link__hint">
+                Open this URL on the screen that should display the active restaurant and board.
+              </p>
+            </header>
+            <div class="display-link__row">
+              <input type="url" data-display-url readonly />
+              <button type="button" data-copy-display-url>Copy URL</button>
+            </div>
+            <p class="display-link__status" data-display-url-status role="status" aria-live="polite"></p>
+            <p class="display-link__notice" data-display-link-guidance></p>
+          </section>
           <label class="form-field">
             <span>Menu title</span>
             <input type="text" data-menu-title-input placeholder="Menu title" />
