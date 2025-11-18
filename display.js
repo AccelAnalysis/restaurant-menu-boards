@@ -1,227 +1,235 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const titleElement = document.querySelector("[data-menu-title]");
-  const subtitleElement = document.querySelector("[data-menu-subtitle]");
-  const updatedElement = document.querySelector("[data-menu-updated]");
-  const sectionsContainer = document.querySelector("[data-menu-sections]");
-  const menuBody = document.querySelector(".menu-body");
-  const boardLabelElement = document.querySelector("[data-board-label]");
-  const boardToggleButton = document.querySelector("[data-board-toggle]");
+/**
+ * display.js – Fire Stick / TV / Kiosk Display Logic
+ * Features:
+ *   • Auto-rotation with configurable timing
+ *   • Secret key enforcement (blocks unauthorized access)
+ *   • Pricing overlay rendering (draggable tags from admin)
+ *   • Burn-in protection via subtle animation + auto-cycle
+ *   • Instant sync with remote backend
+ */
 
-  if (!titleElement || !sectionsContainer) {
-    console.error("Display markup is missing required elements.");
+document.addEventListener("DOMContentLoaded", () => {
+  // Select DOM elements
+  const titleEl = document.querySelector("[data-menu-title]");
+  const subtitleEl = document.querySelector("[data-menu-subtitle]");
+  const updatedEl = document.querySelector("[data-menu-updated]");
+  const boardLabelEl = document.querySelector("[data-board-label]");
+  const sectionsContainer = document.querySelector("[data-menu-sections]");
+  const menuBody = document.body;
+  const menuBoard = document.querySelector("[data-menu-board]");
+  const toggleButton = document.querySelector("[data-board-toggle]");
+
+  // Create pricing overlay container if not exists
+  let overlayContainer = document.querySelector(".pricing-overlay-container");
+  if (!overlayContainer) {
+    overlayContainer = document.createElement("div");
+    overlayContainer.className = "pricing-overlay-container";
+    menuBoard.appendChild(overlayContainer);
+  }
+
+  // Secret Key Enforcement
+  const urlParams = new URLSearchParams(window.location.search);
+  const displayKey = urlParams.get("k");
+  const requiredKey = window.MENU_SHEETS_CONFIG?.displayKey || "";
+
+  if (requiredKey && displayKey !== requiredKey) {
+    document.body.innerHTML = `
+      <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-family:system-ui;">
+        <h1 style="font-size:4rem;margin-bottom:1rem;">Access Denied</h1>
+        <p style="font-size:1.5rem;opacity:0.8;">Invalid or missing display key</p>
+      </div>`;
+    console.error("Display blocked: Invalid secret key");
     return;
   }
 
-  const restaurantsState = window.MenuData.getRestaurants();
-  const params = new URLSearchParams(window.location.search);
-  const requestedRestaurantId = params.get("restaurant");
-  const requestedBoardId = params.get("board");
-  let displayRestaurantId = restaurantsState.restaurants.some(
-    (restaurant) => restaurant.id === requestedRestaurantId
-  )
-    ? requestedRestaurantId
-    : restaurantsState.activeRestaurantId;
-  let boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
-  let displayBoardId = boardsState.boards.some((board) => board.id === requestedBoardId)
-    ? requestedBoardId
-    : boardsState.activeBoardId;
+  // State
+  let currentRestaurantId = null;
+  let currentBoardId = null;
+  let boardsState = { boards: [], activeBoardId: null };
   let unsubscribeMenu = null;
   let unsubscribeBoards = null;
+  let autoRotateTimer = null;
 
-  function updateBoardLabel(state = boardsState) {
-    if (!boardLabelElement || !state) {
-      return;
-    }
-    const board = state.boards.find((entry) => entry.id === displayBoardId);
-    const labelParts = [];
-    if (state.restaurantName) {
-      labelParts.push(state.restaurantName);
-    }
-    if (board && board.name) {
-      labelParts.push(board.name);
-    }
-    boardLabelElement.textContent = labelParts.join(" • ");
+  // Extract requested restaurant/board from URL
+  const requestedRestaurant = urlParams.get("restaurant");
+  const requestedBoard = urlParams.get("board");
+
+  // Initialize from state
+  const allRestaurants = window.MenuData.getRestaurants();
+  currentRestaurantId = allRestaurants.restaurants.find(r => r.id === requestedRestaurant)
+    ? requestedRestaurant
+    : allRestaurants.activeRestaurantId;
+
+  const initialBoards = window.MenuData.getBoards({ restaurantId: currentRestaurantId });
+  currentBoardId = initialBoards.boards.find(b => b.id === requestedBoard)
+    ? requestedBoard
+    : initialBoards.activeBoardId;
+
+  // Auto-Rotation Setup
+  function startAutoRotation() {
+    if (autoRotateTimer) clearInterval(autoRotateTimer);
+    const config = window.MENU_SHEETS_CONFIG?.autoRotate || { enabled: true, intervalMs: 6 * 60 * 1000 };
+    if (!config.enabled || boardsState.boards.length <= 1) return;
+
+    autoRotateTimer = setInterval(() => {
+      cycleToNextBoard();
+    }, config.intervalMs);
   }
 
-  function subscribeToBoard(boardId) {
-    if (unsubscribeMenu) {
-      unsubscribeMenu();
-    }
-    if (typeof window.MenuData.subscribe === "function") {
-      unsubscribeMenu = window.MenuData.subscribe(renderMenu, {
-        boardId,
-        restaurantId: displayRestaurantId
-      });
-    }
-  }
-
-  function subscribeToBoards(restaurantId) {
-    if (unsubscribeBoards) {
-      unsubscribeBoards();
-    }
-    if (typeof window.MenuData.subscribeBoards === "function") {
-      unsubscribeBoards = window.MenuData.subscribeBoards(handleBoardUpdates, {
-        restaurantId
-      });
-    }
-  }
-
-  function handleBoardUpdates(state) {
-    boardsState = state;
-    if (!state.boards.some((board) => board.id === displayBoardId)) {
-      displayBoardId = state.activeBoardId;
-      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
-      subscribeToBoard(displayBoardId);
-      updateBoardLabel(state);
-      return;
-    }
-    if (state.activeBoardId !== displayBoardId) {
-      displayBoardId = state.activeBoardId;
-      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
-      subscribeToBoard(displayBoardId);
-    }
-    updateBoardLabel(state);
-  }
-
-  function handleRestaurantState(state) {
-    const exists = state.restaurants.some((restaurant) => restaurant.id === displayRestaurantId);
-    if (!exists) {
-      displayRestaurantId = state.activeRestaurantId;
-      boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
-      displayBoardId = boardsState.activeBoardId;
-      renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
-      subscribeToBoard(displayBoardId);
-      subscribeToBoards(displayRestaurantId);
-      updateBoardLabel(boardsState);
-    }
-  }
-
-  function cycleBoard() {
-    if (!boardsState || boardsState.boards.length <= 1) {
-      return;
-    }
-    const currentIndex = boardsState.boards.findIndex((board) => board.id === displayBoardId);
-    const nextIndex = currentIndex === -1 || currentIndex === boardsState.boards.length - 1
-      ? 0
-      : currentIndex + 1;
+  function cycleToNextBoard() {
+    if (boardsState.boards.length <= 1) return;
+    const currentIndex = boardsState.boards.findIndex(b => b.id === currentBoardId);
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= boardsState.boards.length) nextIndex = 0;
     const nextBoard = boardsState.boards[nextIndex];
-    displayBoardId = nextBoard.id;
-    window.MenuData.setActiveBoard(displayBoardId, displayRestaurantId);
-    boardsState = window.MenuData.getBoards({ restaurantId: displayRestaurantId });
-    renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
-    updateBoardLabel(boardsState);
-    subscribeToBoard(displayBoardId);
+    switchBoard(nextBoard.id);
   }
 
-  function formatTimestamp() {
-    const date = new Date();
-    return date.toLocaleString(undefined, {
+  function switchBoard(boardId) {
+    currentBoardId = boardId;
+    window.MenuData.setActiveBoard(boardId, currentRestaurantId);
+    renderMenu(window.MenuData.getMenu(boardId, currentRestaurantId));
+    subscribeToMenu(boardId);
+    updateBoardLabel();
+  }
+
+  // Manual cycle (tap bottom-left corner)
+  toggleButton?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    cycleToNextBoard();
+  });
+
+  // Timestamp formatter
+  function formatUpdatedTime() {
+    const now = new Date();
+    return now.toLocaleString(undefined, {
       weekday: "short",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit"
     });
   }
 
-  function createItemElement(item) {
-    const element = document.createElement("article");
-    element.className = "menu-item";
-
-    if (item.image) {
-      const photo = document.createElement("div");
-      photo.className = "menu-item__photo";
-      photo.style.backgroundImage = `url("${item.image}")`;
-      element.appendChild(photo);
-      element.classList.add("menu-item--with-image");
-    }
-
-    const content = document.createElement("div");
-    content.className = "menu-item__content";
-    const name = document.createElement("p");
-    name.className = "menu-item__name";
-    name.textContent = item.name;
-    content.appendChild(name);
-    if (item.description) {
-      const description = document.createElement("p");
-      description.className = "menu-item__description";
-      description.textContent = item.description;
-      content.appendChild(description);
-    }
-    element.appendChild(content);
-
-    if (item.price) {
-      const price = document.createElement("p");
-      price.className = "menu-item__price";
-      price.textContent = `$${item.price}`;
-      element.appendChild(price);
-    }
-
-    return element;
+  // Render pricing overlays
+  function renderPricingOverlays(overlays = []) {
+    overlayContainer.innerHTML = "";
+    overlays.forEach(tag => {
+      const el = document.createElement("div");
+      el.className = "pricing-tag";
+      el.textContent = tag.text || "$0.00";
+      el.style.left = tag.x + "%";
+      el.style.top = tag.y + "%";
+      el.style.fontSize = tag.size + "px";
+      el.style.color = tag.color || "white";
+      el.style.background = tag.bg || "rgba(249, 115, 22, 0.95)";
+      overlayContainer.appendChild(el);
+    });
   }
 
-  function createSectionElement(section) {
-    const sectionElement = document.createElement("section");
-    sectionElement.className = "menu-section";
-    sectionElement.innerHTML = `
-      <header>
-        <h2>${section.name}</h2>
-        ${section.description ? `<p class="menu-section__description">${section.description}</p>` : ""}
-      </header>
-    `;
-
-    const itemsContainer = document.createElement("div");
-    itemsContainer.className = "menu-items";
-    section.items.forEach((item) => itemsContainer.appendChild(createItemElement(item)));
-    sectionElement.appendChild(itemsContainer);
-    return sectionElement;
-  }
-
+  // Apply background
   function applyBackground(menu) {
-    if (!menuBody) {
-      return;
-    }
-
-    const backgrounds = Array.isArray(menu.backgrounds) ? menu.backgrounds : [];
-    const activeBackground =
-      backgrounds.find((background) => background.id === menu.activeBackgroundId) || backgrounds[0];
-
-    if (activeBackground) {
+    const backgrounds = menu.backgrounds || [];
+    const activeBg = backgrounds.find(b => b.id === menu.activeBackgroundId) || backgrounds[0];
+    if (activeBg) {
+      menuBody.style.setProperty("--menu-background-image", `url("${activeBg.source}")`);
       menuBody.dataset.hasBackground = "true";
-      menuBody.style.setProperty("--menu-background-image", `url("${activeBackground.source}")`);
     } else {
       menuBody.dataset.hasBackground = "false";
       menuBody.style.removeProperty("--menu-background-image");
     }
   }
 
+  // Render full menu
   function renderMenu(menu) {
-    titleElement.textContent = menu.title;
-    subtitleElement.textContent = menu.subtitle || "";
-    updatedElement.textContent = `Updated ${formatTimestamp()}`;
+    if (!menu) return;
 
+    titleEl.textContent = menu.title || "Menu";
+    subtitleEl.textContent = menu.subtitle || "";
+    updatedEl.textContent = `Updated ${formatUpdatedTime()}`;
+
+    // Sections & items
     sectionsContainer.innerHTML = "";
-    menu.sections.forEach((section) => {
-      sectionsContainer.appendChild(createSectionElement(section));
+    (menu.sections || []).forEach(section => {
+      const secEl = document.createElement("section");
+      secEl.className = "menu-section";
+      secEl.innerHTML = `
+        <h2>${section.name}</h2>
+        ${section.description ? `<p class="menu-section__description">${section.description}</p>` : ""}
+        <div class="menu-items"></div>
+      `;
+      const itemsContainer = secEl.querySelector(".menu-items");
+      (section.items || []).forEach(item => {
+        const itemEl = document.createElement("article");
+        itemEl.className = "menu-item" + (item.image ? " menu-item--with-image" : "");
+
+        if (item.image) {
+          itemEl.innerHTML += `<div class="menu-item__photo" style="background-image:url('${item.image}')"></div>`;
+        }
+
+        itemEl.innerHTML += `
+          <div class="menu-item__content">
+            <p class="menu-item__name">${item.name}</p>
+            ${item.description ? `<p class="menu-item__description">${item.description}</p>` : ""}
+          </div>
+          ${item.price ? `<p class="menu-item__price">$${item.price}</p>` : ""}
+        `;
+        itemsContainer.appendChild(itemEl);
+      });
+      sectionsContainer.appendChild(secEl);
     });
+
+    // Background & overlays
     applyBackground(menu);
+    renderPricingOverlays(menu.pricingOverlays || []);
   }
 
-  if (boardToggleButton) {
-    boardToggleButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      cycleBoard();
+  // Update board label (e.g., "Downtown • Lunch Board")
+  function updateBoardLabel() {
+    if (!boardLabelEl) return;
+    const board = boardsState.boards.find(b => b.id === currentBoardId);
+    const restaurant = window.MenuData.getRestaurants().restaurants.find(r => r.id === currentRestaurantId);
+    const parts = \`\${restaurant?.name || ""} \${board?.name ? "• " + board.name : ""}\`.trim();
+    boardLabelEl.textContent = parts || "Menu Board";
+  }
+
+  // Subscription handlers
+  function subscribeToMenu(boardId) {
+    if (unsubscribeMenu) unsubscribeMenu();
+    unsubscribeMenu = window.MenuData.subscribe(renderMenu, {
+      boardId,
+      restaurantId: currentRestaurantId
     });
   }
 
-  renderMenu(window.MenuData.getMenu(displayBoardId, displayRestaurantId));
-  subscribeToBoard(displayBoardId);
-  updateBoardLabel(boardsState);
-  subscribeToBoards(displayRestaurantId);
-  if (typeof window.MenuData.subscribeRestaurants === "function") {
-    window.MenuData.subscribeRestaurants(handleRestaurantState);
+  function subscribeToBoards() {
+    if (unsubscribeBoards) unsubscribeBoards();
+    unsubscribeBoards = window.MenuData.subscribeBoards(state => {
+      boardsState = state;
+      if (!state.boards.find(b => b.id === currentBoardId)) {
+        currentBoardId = state.activeBoardId;
+        renderMenu(window.MenuData.getMenu(currentBoardId, currentRestaurantId));
+        subscribeToMenu(currentBoardId);
+      }
+      updateBoardLabel();
+      startAutoRotation();
+    }, { restaurantId: currentRestaurantId });
   }
-  if (typeof window.MenuData.syncNow === "function") {
+
+  // Initial render
+  renderMenu(window.MenuData.getMenu(currentBoardId, currentRestaurantId));
+  updateBoardLabel();
+  subscribeToMenu(currentBoardId);
+  subscribeToBoards();
+  startAutoRotation();
+
+  // Force sync on load & visibility
+  if (window.MenuData.syncNow) {
     window.MenuData.syncNow();
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) window.MenuData.syncNow();
+    });
   }
+
+  console.log("%c Display Engine Loaded – Secure • Auto-Rotating • Overlays Ready", "background:#f97316;color:white;padding:8px 16px;border-radius:8px;font-size:14px;");
 });
