@@ -551,6 +551,35 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSections();
   });
 
+  restaurantSelect.addEventListener("change", (event) => {
+    const restaurantId = event.target.value;
+    activeRestaurantId = restaurantId;
+    window.MenuData.setActiveRestaurant(restaurantId);
+    loadRestaurantContext(restaurantId);
+  });
+
+  restaurantNameInput.addEventListener("change", (event) => {
+    window.MenuData.renameRestaurant(activeRestaurantId, event.target.value);
+  });
+
+  addRestaurantButton.addEventListener("click", () => {
+    const newRestaurant = window.MenuData.createRestaurant();
+    activeRestaurantId = newRestaurant.id;
+    renderRestaurantControls(window.MenuData.getRestaurants());
+    loadRestaurantContext(activeRestaurantId);
+  });
+
+  deleteRestaurantButton.addEventListener("click", () => {
+    if (!confirm("Delete this restaurant and all of its boards?")) {
+      return;
+    }
+    window.MenuData.deleteRestaurant(activeRestaurantId);
+    const updatedRestaurants = window.MenuData.getRestaurants();
+    activeRestaurantId = updatedRestaurants.activeRestaurantId;
+    renderRestaurantControls(updatedRestaurants);
+    loadRestaurantContext(activeRestaurantId);
+  });
+
   titleInput.addEventListener("input", (event) => {
     menu.title = event.target.value;
     persistMenu();
