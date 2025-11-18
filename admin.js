@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
       elements.statusEl.textContent = "";
       delete elements.statusEl.dataset.tone;
-    }, 3000 3000);
+    }, 3000);
   }
 
   // === Pricing Overlay Editor ===
