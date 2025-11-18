@@ -1,126 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Menu Admin</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body class="admin-body">
-    <div class="admin-container">
-      <header class="admin-header">
-        <div>
-          <p class="menu-tagline">Restaurant Menu Boards</p>
-          <h1>Menu Administration</h1>
-          <p>Update items and sections. Changes save automatically.</p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Restaurant Menu Admin • Pro v3.0</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="admin-body">
+  <div class="admin-container">
+    <header class="admin-header">
+      <div>
+        <h1>Menu Board Admin <span style="font-size:0.6em;color:var(--accent)">v3.0</span></h1>
+        <p>Instant remote updates • Drag & drop • Point-and-click pricing • Fire Stick ready</p>
+      </div>
+      <a href="./index.html" target="_blank" class="admin-link">Open Live Display →</a>
+    </header>
+
+    <!-- Restaurant & Board Selector -->
+    <section class="quick-controls">
+      <div class="form-row">
+        <div class="form-group grow">
+          <label>Restaurant</label>
+          <select data-restaurant-select></select>
         </div>
-        <a class="admin-link" href="./index.html" target="_blank" rel="noopener noreferrer"
-          >Open Menu Display</a
-        >
-      </header>
-      <main>
-        <form id="menu-form" autocomplete="off">
-          <section class="restaurant-manager">
-            <div class="board-manager__row">
-              <label class="form-field board-manager__select">
-                <span>Restaurant</span>
-                <select data-restaurant-select></select>
-              </label>
-              <button type="button" data-add-restaurant>Add restaurant</button>
-              <button type="button" data-duplicate-restaurant class="ghost">Duplicate restaurant</button>
-            </div>
-            <label class="form-field">
-              <span>Restaurant name</span>
-              <input type="text" data-restaurant-name-input placeholder="e.g. Downtown" />
-            </label>
-            <div class="board-manager__row board-manager__row--end">
-              <button type="button" data-delete-restaurant class="danger">Delete restaurant</button>
-            </div>
-          </section>
-          <section class="board-manager">
-            <div class="board-manager__row">
-              <label class="form-field board-manager__select">
-                <span>Menu board</span>
-                <select data-board-select></select>
-              </label>
-              <button type="button" data-add-board>Add board</button>
-              <button type="button" data-duplicate-board class="ghost">Duplicate board</button>
-            </div>
-            <label class="form-field">
-              <span>Board name</span>
-              <input type="text" data-board-name-input placeholder="e.g. Brunch Board" />
-            </label>
-            <div class="board-manager__row board-manager__row--end">
-              <button type="button" data-delete-board class="danger">Delete board</button>
-            </div>
-          </section>
-          <section class="display-link">
-            <header>
-              <p class="menu-tagline">Display link</p>
-              <h2>Share this menu board</h2>
-              <p class="display-link__hint">
-                Open this URL on the screen that should display the active restaurant and board.
-              </p>
+        <button data-add-restaurant class="btn-primary">+ New Restaurant</button>
+      </div>
+      <div class="form-row">
+        <input type="text" data-restaurant-name-input placeholder="Restaurant name..." class="grow">
+        <button data-duplicate-restaurant class="btn-ghost">Duplicate</button>
+        <button data-delete-restaurant class="btn-danger">Delete</button>
+      </div>
+
+      <div class="form-row" style="margin-top:1.5rem;">
+        <div class="form-group grow">
+          <label>Menu Board (Slide)</label>
+          <select data-board-select></select>
+        </div>
+        <button data-add-board class="btn-primary">+ New Board</button>
+      </div>
+      <div class="form-row">
+        <input type="text" data-board-name-input placeholder="Board name (e.g. Lunch Menu)..." class="grow">
+        <button data-duplicate-board class="btn-ghost">Duplicate</button>
+        <button data-delete-board class="btn-danger">Delete</button>
+      </div>
+    </section>
+
+    <!-- Secure Display URL -->
+    <section class="display-link card">
+      <h2>Fire Stick / TV Display URL</h2>
+      <div class="form-row">
+        <input type="text" data-display-url readonly>
+        <button data-copy-display-url class="btn-primary">Copy URL</button>
+      </div>
+      <p data-display-url-status class="status"></p>
+    </section>
+
+    <!-- Menu Editor -->
+    <section class="editor-grid">
+      <div class="editor-panel">
+        <div class="form-row">
+          <input type="text" data-menu-title-input placeholder="Menu Title (e.g. Sunny Side Café)">
+          <input type="text" data-menu-subtitle-input placeholder="Subtitle (optional)">
+        </div>
+
+        <div class="toolbar">
+          <button data-add-section class="btn-primary">+ Add Section</button>
+        </div>
+
+        <div data-sections class="sections-list"></div>
+      </div>
+
+      <!-- Live Preview (Fixed Position) -->
+      <div class="preview-panel">
+        <div class="preview-frame" data-preview-container>
+          <div class="menu-board menu-board--preview" data-preview-board>
+            <div class="pricing-overlay-container"></div>
+            <header class="menu-header">
+              <div class="menu-brand">
+                <p class="menu-board-label" data-preview-label></p>
+                <h1 class="menu-title" data-preview-title>Menu</h1>
+                <p class="menu-subtitle" data-preview-subtitle></p>
+              </div>
             </header>
-            <div class="display-link__row">
-              <input type="url" data-display-url readonly />
-              <button type="button" data-copy-display-url>Copy URL</button>
-            </div>
-            <p class="display-link__status" data-display-url-status role="status" aria-live="polite"></p>
-            <p class="display-link__notice" data-display-link-guidance></p>
-          </section>
-          <label class="form-field">
-            <span>Menu title</span>
-            <input type="text" data-menu-title-input placeholder="Menu title" />
-          </label>
-          <label class="form-field">
-            <span>Subtitle (optional)</span>
-            <input type="text" data-menu-subtitle-input placeholder="Add a subtitle" />
-          </label>
-          <div class="admin-toolbar">
-            <button type="button" data-add-section>Add section</button>
-            <button type="button" data-reset>Reset to defaults</button>
+            <main class="menu-sections" data-preview-sections></main>
           </div>
-          <div class="sections-editor" data-sections></div>
-        </form>
-        <section class="background-manager">
-          <header>
-            <div>
-              <p class="menu-tagline">Visual Theme</p>
-              <h2>Background library</h2>
-              <p>Save multiple backgrounds by linking images or uploading your own.</p>
-            </div>
-          </header>
-          <div class="background-inputs">
-            <label class="form-field">
-              <span>Label (optional)</span>
-              <input type="text" data-background-name placeholder="Coffee shop mural" />
-            </label>
-            <label class="form-field">
-              <span>Image URL</span>
-              <input
-                type="url"
-                data-background-url
-                placeholder="https://example.com/background.jpg"
-              />
-            </label>
-            <button type="button" data-add-background-url>Add linked image</button>
-          </div>
-          <div class="background-upload">
-            <label class="form-field">
-              <span>Upload image</span>
-              <input type="file" accept="image/*" data-background-upload />
-            </label>
-            <p class="background-upload__hint">
-              Images you link or upload are synced through the connected Google Sheet.
-            </p>
-          </div>
-          <div class="background-list" data-backgrounds></div>
-        </section>
-      </main>
-    </div>
-    <script src="config.js"></script>
-    <script src="shared.js"></script>
-    <script src="admin.js"></script>
-  </body>
+        </div>
+        <div class="preview-instruction">
+          Double-click anywhere to add a price tag • Drag to move • Resize with corner • Click × to delete
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="shared.js"></script>
+  <script src="admin.js"></script> <!-- This is the NEW fixed version below -->
+</body>
 </html>
