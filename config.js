@@ -76,7 +76,7 @@ window.DEFAULT_MENU = {
 // Configure the published Google Apps Script URL (and optional settings) that
 // backs the shared Google Sheet. Leave the endpoint empty to keep data local.
 window.MENU_SHEETS_CONFIG = {
-  endpoint: "https://script.google.com/macros/s/AKfycbwUN2Y0gg51KBj4CUdQIbNa5VjLSxZj6g8Y34Au2oP1OdSV3zaM24_f5XIh9NvmcYn8/exec",
+  endpoint: "https://script.google.com/macros/s/AKfycbz4rBaKb9IUhopuMGLHEZxbxj2HqqB2LE3R8XIIRFfWqNOiQUksg_gOz79CZQbtEPtg/exec",
   pollInterval: 10000,
   token: "90210-rAxfyg-5zokpu-ceqpyb",
   timeoutMs: 15000
