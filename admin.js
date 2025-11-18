@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.displayUrlInput.value = buildDisplayUrl(activeRestaurantId, activeBoardId);
   }
 
-  // === Copy to Clipboard with Feedback ===
+// === Copy to Clipboard with Feedback ===
   elements.copyUrlBtn?.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(elements.displayUrlInput.value);
@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
       delete elements.statusEl.dataset.tone;
     }, 3000);
   }
-
+  
   // === Pricing Overlay Editor ===
   function initPricingEditor(menu) {
     const container = elements.previewOverlayContainer;
