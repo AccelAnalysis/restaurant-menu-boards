@@ -20,6 +20,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const duplicateBoardButton = document.querySelector("[data-duplicate-board]");
   const deleteBoardButton = document.querySelector("[data-delete-board]");
 
+  const hasRestaurantControls = Boolean(
+    restaurantSelect &&
+    restaurantNameInput &&
+    addRestaurantButton &&
+    duplicateRestaurantButton &&
+    deleteRestaurantButton
+  );
+
+  if (!hasRestaurantControls) {
+    console.warn(
+      "Restaurant manager controls are missing from the markup. Multi-restaurant editing is disabled in this session."
+    );
+  }
+
   if (
     !sectionsContainer ||
     !addSectionButton ||
@@ -29,11 +43,6 @@ document.addEventListener("DOMContentLoaded", () => {
     !addBackgroundUrlButton ||
     !backgroundUrlInput ||
     !backgroundUploadInput ||
-    !restaurantSelect ||
-    !restaurantNameInput ||
-    !addRestaurantButton ||
-    !duplicateRestaurantButton ||
-    !deleteRestaurantButton ||
     !boardSelect ||
     !boardNameInput ||
     !addBoardButton ||
@@ -57,6 +66,10 @@ document.addEventListener("DOMContentLoaded", () => {
     restaurantsState = state;
     if (!state.restaurants.some((restaurant) => restaurant.id === activeRestaurantId)) {
       activeRestaurantId = state.activeRestaurantId;
+    }
+
+    if (!hasRestaurantControls) {
+      return;
     }
 
     restaurantSelect.innerHTML = "";
@@ -213,9 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     menu.backgrounds.push(background);
-    if (!menu.activeBackgroundId) {
-      menu.activeBackgroundId = background.id;
-    }
+    menu.activeBackgroundId = background.id;
 
     persistMenu();
     renderBackgrounds();
@@ -295,16 +306,63 @@ document.addEventListener("DOMContentLoaded", () => {
     element.dataset.sectionIndex = sectionIndex;
     element.dataset.itemIndex = itemIndex;
     element.innerHTML = `
-      <div>
-        <input type="text" value="${escapeAttribute(item.name)}" data-item-name placeholder="Item name" />
-        <input type="text" value="${escapeAttribute(item.description)}" data-item-description placeholder="Description" />
+      <div class="item-editor__grid">
+        <div class="item-editor__fields">
+          <input type="text" value="${escapeAttribute(item.name)}" data-item-name placeholder="Item name" />
+          <input type="text" value="${escapeAttribute(item.description)}" data-item-description placeholder="Description" />
+        </div>
+        <div class="item-editor__media">
+          <div class="item-image-preview" data-item-image-preview data-has-image="${item.image ? "true" : "false"}">
+            <span data-item-image-hint>${item.image ? "" : "No image selected"}</span>
+          </div>
+          <input
+            type="url"
+            value="${escapeAttribute(item.image || "")}"
+            data-item-image
+            placeholder="Image URL"
+          />
+          <div class="item-image-actions">
+            <label class="item-image-upload">
+              <span>Upload image</span>
+              <input type="file" accept="image/*" data-item-image-upload />
+            </label>
+            <button type="button" class="ghost" data-clear-item-image ${item.image ? "" : "disabled"}>
+              Remove image
+            </button>
+          </div>
+        </div>
       </div>
       <div class="item-actions">
         <input type="text" value="${escapeAttribute(item.price)}" data-item-price placeholder="Price" />
         <button type="button" data-remove-item>Remove</button>
       </div>
     `;
+    updateItemImagePreview(element, item.image);
     return element;
+  }
+
+  function updateItemImagePreview(editorElement, image) {
+    if (!editorElement) {
+      return;
+    }
+    const preview = editorElement.querySelector("[data-item-image-preview]");
+    const hint = editorElement.querySelector("[data-item-image-hint]");
+    const removeButton = editorElement.querySelector("[data-clear-item-image]");
+    if (preview) {
+      if (image) {
+        preview.dataset.hasImage = "true";
+        preview.style.backgroundImage = `url("${image}")`;
+      } else {
+        preview.dataset.hasImage = "false";
+        preview.style.backgroundImage = "";
+      }
+    }
+    if (hint) {
+      hint.textContent = image ? "" : "No image selected";
+    }
+    if (removeButton) {
+      removeButton.disabled = !image;
+    }
   }
 
   function createSectionEditor(section, index) {
@@ -348,7 +406,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function ensureItem(sectionIndex, itemIndex) {
     ensureSection(sectionIndex);
     if (!menu.sections[sectionIndex].items[itemIndex]) {
-      menu.sections[sectionIndex].items[itemIndex] = { name: "New Item", description: "", price: "" };
+      menu.sections[sectionIndex].items[itemIndex] = {
+        name: "New Item",
+        description: "",
+        price: "",
+        image: ""
+      };
     }
   }
 
@@ -375,6 +438,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const itemIndex = Number(event.target.closest("[data-item-index]").dataset.itemIndex);
       ensureItem(sectionIndex, itemIndex);
       menu.sections[sectionIndex].items[itemIndex].price = event.target.value;
+    } else if (event.target.matches("[data-item-image]")) {
+      const itemElement = event.target.closest("[data-item-index]");
+      const itemIndex = Number(itemElement.dataset.itemIndex);
+      ensureItem(sectionIndex, itemIndex);
+      const value = event.target.value.trim();
+      menu.sections[sectionIndex].items[itemIndex].image = value;
+      event.target.value = value;
+      updateItemImagePreview(itemElement, value);
     } else {
       return;
     }
@@ -388,7 +459,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const sectionIndex = Number(sectionElement.dataset.sectionIndex);
 
     if (event.target.matches("[data-add-item]")) {
-      menu.sections[sectionIndex].items.push({ name: "New Item", description: "", price: "" });
+      menu.sections[sectionIndex].items.push({
+        name: "New Item",
+        description: "",
+        price: "",
+        image: ""
+      });
       persistMenu(true);
     }
 
@@ -402,6 +478,64 @@ document.addEventListener("DOMContentLoaded", () => {
       menu.sections[sectionIndex].items.splice(itemIndex, 1);
       persistMenu(true);
     }
+
+    if (event.target.matches("[data-clear-item-image]")) {
+      const itemElement = event.target.closest("[data-item-index]");
+      if (!itemElement) {
+        return;
+      }
+      const itemIndex = Number(itemElement.dataset.itemIndex);
+      ensureItem(sectionIndex, itemIndex);
+      menu.sections[sectionIndex].items[itemIndex].image = "";
+      const urlInput = itemElement.querySelector("[data-item-image]");
+      if (urlInput) {
+        urlInput.value = "";
+      }
+      updateItemImagePreview(itemElement, "");
+      persistMenu();
+    }
+  });
+
+  sectionsContainer.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-item-image-upload]")) {
+      return;
+    }
+    const sectionElement = event.target.closest("[data-section-index]");
+    const itemElement = event.target.closest("[data-item-index]");
+    if (!sectionElement || !itemElement) {
+      return;
+    }
+    const sectionIndex = Number(sectionElement.dataset.sectionIndex);
+    const itemIndex = Number(itemElement.dataset.itemIndex);
+    const files = event.target.files;
+    if (!files || !files.length) {
+      return;
+    }
+    const file = files[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        alert("Unable to read that file. Please try another image.");
+        return;
+      }
+      ensureItem(sectionIndex, itemIndex);
+      menu.sections[sectionIndex].items[itemIndex].image = reader.result;
+      const urlInput = itemElement.querySelector("[data-item-image]");
+      if (urlInput) {
+        urlInput.value = reader.result;
+      }
+      updateItemImagePreview(itemElement, reader.result);
+      persistMenu();
+    };
+    reader.onerror = (error) => {
+      console.error("Unable to read uploaded file", error);
+      alert("Unable to read that file. Please try another image.");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
   });
 
   addSectionButton.addEventListener("click", () => {
@@ -518,44 +652,46 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  restaurantSelect.addEventListener("change", (event) => {
-    const restaurantId = event.target.value;
-    window.MenuData.setActiveRestaurant(restaurantId);
-    loadRestaurantContext(restaurantId);
-  });
+  if (hasRestaurantControls) {
+    restaurantSelect.addEventListener("change", (event) => {
+      const restaurantId = event.target.value;
+      window.MenuData.setActiveRestaurant(restaurantId);
+      loadRestaurantContext(restaurantId);
+    });
 
-  restaurantNameInput.addEventListener("change", (event) => {
-    window.MenuData.renameRestaurant(activeRestaurantId, event.target.value);
-  });
+    restaurantNameInput.addEventListener("change", (event) => {
+      window.MenuData.renameRestaurant(activeRestaurantId, event.target.value);
+    });
 
-  addRestaurantButton.addEventListener("click", () => {
-    const proposedName = prompt("New restaurant name (optional)");
-    const options = {};
-    if (proposedName && proposedName.trim()) {
-      options.name = proposedName.trim();
-    }
-    const newRestaurant = window.MenuData.createRestaurant(options);
-    restaurantsState = window.MenuData.getRestaurants();
-    renderRestaurantControls(restaurantsState);
-    loadRestaurantContext(newRestaurant.id);
-  });
+    addRestaurantButton.addEventListener("click", () => {
+      const proposedName = prompt("New restaurant name (optional)");
+      const options = {};
+      if (proposedName && proposedName.trim()) {
+        options.name = proposedName.trim();
+      }
+      const newRestaurant = window.MenuData.createRestaurant(options);
+      restaurantsState = window.MenuData.getRestaurants();
+      renderRestaurantControls(restaurantsState);
+      loadRestaurantContext(newRestaurant.id);
+    });
 
-  duplicateRestaurantButton.addEventListener("click", () => {
-    const duplicate = window.MenuData.createRestaurant({ sourceRestaurantId: activeRestaurantId });
-    restaurantsState = window.MenuData.getRestaurants();
-    renderRestaurantControls(restaurantsState);
-    loadRestaurantContext(duplicate.id);
-  });
+    duplicateRestaurantButton.addEventListener("click", () => {
+      const duplicate = window.MenuData.createRestaurant({ sourceRestaurantId: activeRestaurantId });
+      restaurantsState = window.MenuData.getRestaurants();
+      renderRestaurantControls(restaurantsState);
+      loadRestaurantContext(duplicate.id);
+    });
 
-  deleteRestaurantButton.addEventListener("click", () => {
-    if (!confirm("Delete this restaurant and all of its boards?")) {
-      return;
-    }
-    window.MenuData.deleteRestaurant(activeRestaurantId);
-    restaurantsState = window.MenuData.getRestaurants();
-    renderRestaurantControls(restaurantsState);
-    loadRestaurantContext(restaurantsState.activeRestaurantId);
-  });
+    deleteRestaurantButton.addEventListener("click", () => {
+      if (!confirm("Delete this restaurant and all of its boards?")) {
+        return;
+      }
+      window.MenuData.deleteRestaurant(activeRestaurantId);
+      restaurantsState = window.MenuData.getRestaurants();
+      renderRestaurantControls(restaurantsState);
+      loadRestaurantContext(restaurantsState.activeRestaurantId);
+    });
+  }
 
   boardSelect.addEventListener("change", (event) => {
     const boardId = event.target.value;

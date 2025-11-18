@@ -33,6 +33,19 @@
   const remoteState = {
     inFlight: null
   };
+  const broadcastChannel =
+    typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("restaurant-menu-boards") : null;
+
+  function broadcastState(serialized) {
+    if (!broadcastChannel || typeof serialized !== "string" || !serialized) {
+      return;
+    }
+    try {
+      broadcastChannel.postMessage({ type: "STATE_UPDATE", payload: serialized });
+    } catch (error) {
+      console.warn("Unable to broadcast menu changes", error);
+    }
+  }
 
   function clone(object) {
     return JSON.parse(JSON.stringify(object));
@@ -53,7 +66,9 @@
       price:
         typeof item.price === "number" || typeof item.price === "string"
           ? String(item.price)
-          : ""
+          : "",
+      image:
+        typeof item.image === "string" && item.image.trim() ? item.image.trim() : ""
     };
   }
 
@@ -381,12 +396,43 @@
     notifyBoardListeners();
     notifyMenuListeners();
     notifyRestaurantListeners();
+    broadcastState(serialized);
     if (remoteEnabled) {
-      remoteSaveState(normalized).catch((error) => {
-        console.error("Unable to save menu to Google Sheets", error);
-      });
+      remoteSaveState(normalized)
+        .then((remotePayload) => {
+          applyExternalState(remotePayload, { force: true });
+        })
+        .catch((error) => {
+          console.error("Unable to save menu to Google Sheets", error);
+        });
     }
     return getState();
+  }
+
+  function applyExternalState(nextState, options = {}) {
+    if (!nextState || typeof nextState !== "object") {
+      return null;
+    }
+
+    const normalized = normalizeRestaurantsState(nextState);
+    const serialized = JSON.stringify(normalized);
+    if (!options.force && serialized === lastSerializedState) {
+      return normalized;
+    }
+
+    cachedState = clone(normalized);
+    memoryState = normalized;
+    lastSerializedState = serialized;
+    if (options.persist !== false) {
+      safeSetItem(STORAGE_KEY, serialized);
+    }
+    notifyBoardListeners();
+    notifyMenuListeners();
+    notifyRestaurantListeners();
+    if (options.broadcast !== false) {
+      broadcastState(serialized);
+    }
+    return normalized;
   }
 
   function getMenu(boardId, restaurantId) {
@@ -695,29 +741,6 @@
     });
   }
 
-  function notifyMenuListeners() {
-    menuListeners.forEach((listener) => {
-      try {
-        listener.callback(getMenu(listener.boardId));
-      } catch (error) {
-        console.error("Menu listener failed", error);
-      }
-    });
-  }
-
-  function notifyBoardListeners() {
-    const snapshot = getBoards();
-    boardListeners.forEach((listener) => {
-      try {
-        listener.callback(
-          getMenu(listener.boardId, { restaurantId: listener.restaurantId })
-        );
-      } catch (error) {
-        console.error("Board listener failed", error);
-      }
-    });
-  }
-
   function appendQuery(url, queryString) {
     if (!queryString) {
       return url;
@@ -856,16 +879,7 @@
         if (!remoteStatePayload) {
           return null;
         }
-        const serialized = JSON.stringify(remoteStatePayload);
-        if (force || serialized !== lastSerializedState) {
-          cachedState = clone(remoteStatePayload);
-          memoryState = remoteStatePayload;
-          lastSerializedState = serialized;
-          safeSetItem(STORAGE_KEY, serialized);
-          notifyBoardListeners();
-          notifyMenuListeners();
-          notifyRestaurantListeners();
-        }
+        applyExternalState(remoteStatePayload, { force });
         return remoteStatePayload;
       })
       .catch((error) => {
@@ -892,6 +906,24 @@
     });
   }
 
+  if (broadcastChannel) {
+    broadcastChannel.addEventListener("message", (event) => {
+      const data = event.data;
+      if (!data || data.type !== "STATE_UPDATE" || typeof data.payload !== "string") {
+        return;
+      }
+      if (data.payload === lastSerializedState) {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(data.payload);
+        applyExternalState(parsed, { force: true, broadcast: false, persist: false });
+      } catch (error) {
+        console.warn("Unable to apply broadcasted menu update", error);
+      }
+    });
+  }
+
   window.MenuData = {
     getMenu,
     saveMenu,
@@ -913,11 +945,14 @@
   };
 
   window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) {
-      cachedState = null;
-      notifyBoardListeners();
-      notifyMenuListeners();
-      notifyRestaurantListeners();
+    if (event.key !== STORAGE_KEY || typeof event.newValue !== "string") {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(event.newValue);
+      applyExternalState(parsed, { force: true, broadcast: false, persist: false });
+    } catch (error) {
+      console.warn("Unable to process shared menu update", error);
     }
   });
 })();

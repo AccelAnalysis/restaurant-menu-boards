@@ -113,24 +113,6 @@ document.addEventListener("DOMContentLoaded", () => {
     subscribeToBoard(displayBoardId);
   }
 
-  function subscribeToBoard(boardId) {
-    if (unsubscribeMenu) {
-      unsubscribeMenu();
-    }
-    if (typeof window.MenuData.subscribe === "function") {
-      unsubscribeMenu = window.MenuData.subscribe(renderMenu, { boardId });
-    }
-  }
-
-  function handleBoardUpdates(state) {
-    if (!state.boards.some((board) => board.id === displayBoardId)) {
-      displayBoardId = state.activeBoardId;
-      renderMenu(window.MenuData.getMenu(displayBoardId));
-      subscribeToBoard(displayBoardId);
-    }
-    updateBoardLabel(state);
-  }
-
   function formatTimestamp() {
     const date = new Date();
     return date.toLocaleString(undefined, {
@@ -143,16 +125,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function createItemElement(item) {
-    const element = document.createElement("div");
+    const element = document.createElement("article");
     element.className = "menu-item";
-    const priceMarkup = item.price ? `<p class="menu-item__price">$${item.price}</p>` : "";
-    element.innerHTML = `
-      <div>
-        <p class="menu-item__name">${item.name}</p>
-        ${item.description ? `<p class="menu-item__description">${item.description}</p>` : ""}
-      </div>
-      ${priceMarkup}
-    `;
+
+    if (item.image) {
+      const photo = document.createElement("div");
+      photo.className = "menu-item__photo";
+      photo.style.backgroundImage = `url("${item.image}")`;
+      element.appendChild(photo);
+      element.classList.add("menu-item--with-image");
+    }
+
+    const content = document.createElement("div");
+    content.className = "menu-item__content";
+    const name = document.createElement("p");
+    name.className = "menu-item__name";
+    name.textContent = item.name;
+    content.appendChild(name);
+    if (item.description) {
+      const description = document.createElement("p");
+      description.className = "menu-item__description";
+      description.textContent = item.description;
+      content.appendChild(description);
+    }
+    element.appendChild(content);
+
+    if (item.price) {
+      const price = document.createElement("p");
+      price.className = "menu-item__price";
+      price.textContent = `$${item.price}`;
+      element.appendChild(price);
+    }
+
     return element;
   }
 
