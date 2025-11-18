@@ -1,5 +1,5 @@
 window.DEFAULT_MENU = {
-  title: "Sunny Side Café",
+  title: "Accel Café",
   subtitle: "Locally roasted coffee • Freshly baked pastries",
   sections: [
     {
