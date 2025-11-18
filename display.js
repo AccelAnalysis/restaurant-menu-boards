@@ -124,14 +124,37 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function sanitizeImageUrl(value) {
+    if (typeof value !== "string") {
+      return "";
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+    if (/^data:image\//i.test(trimmed)) {
+      return trimmed;
+    }
+    try {
+      const parsed = new URL(trimmed, window.location.origin);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.toString();
+      }
+    } catch (error) {
+      return "";
+    }
+    return "";
+  }
+
   function createItemElement(item) {
     const element = document.createElement("article");
     element.className = "menu-item";
 
-    if (item.image) {
+    const safeImageUrl = sanitizeImageUrl(item.image);
+    if (safeImageUrl) {
       const photo = document.createElement("div");
       photo.className = "menu-item__photo";
-      photo.style.backgroundImage = `url("${item.image}")`;
+      photo.style.backgroundImage = `url("${safeImageUrl}")`;
       element.appendChild(photo);
       element.classList.add("menu-item--with-image");
     }
@@ -163,12 +186,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function createSectionElement(section) {
     const sectionElement = document.createElement("section");
     sectionElement.className = "menu-section";
-    sectionElement.innerHTML = `
-      <header>
-        <h2>${section.name}</h2>
-        ${section.description ? `<p class="menu-section__description">${section.description}</p>` : ""}
-      </header>
-    `;
+
+    const header = document.createElement("header");
+    const heading = document.createElement("h2");
+    heading.textContent = section.name;
+    header.appendChild(heading);
+
+    if (section.description) {
+      const description = document.createElement("p");
+      description.className = "menu-section__description";
+      description.textContent = section.description;
+      header.appendChild(description);
+    }
+
+    sectionElement.appendChild(header);
 
     const itemsContainer = document.createElement("div");
     itemsContainer.className = "menu-items";
@@ -186,9 +217,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeBackground =
       backgrounds.find((background) => background.id === menu.activeBackgroundId) || backgrounds[0];
 
-    if (activeBackground) {
+    const safeSource = sanitizeImageUrl(activeBackground?.source);
+    if (activeBackground && safeSource) {
       menuBody.dataset.hasBackground = "true";
-      menuBody.style.setProperty("--menu-background-image", `url("${activeBackground.source}")`);
+      menuBody.style.setProperty("--menu-background-image", `url("${safeSource}")`);
     } else {
       menuBody.dataset.hasBackground = "false";
       menuBody.style.removeProperty("--menu-background-image");
