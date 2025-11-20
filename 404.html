@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting…</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        padding: 2rem;
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 0.125rem 0.35rem;
+        border-radius: 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Redirecting…</h1>
+    <p>This project only has two pages:</p>
+    <ul>
+      <li><code>/index.html</code> for the public display</li>
+      <li><code>/admin.html</code> for editing the menu</li>
+    </ul>
+    <p>You will be sent to the closest match in a moment.</p>
+    <script>
+      (function redirect() {
+        const path = window.location.pathname.toLowerCase();
+        if (path.includes("editor")) {
+          window.location.replace("./admin.html");
+          return;
+        }
+        window.location.replace("./index.html");
+      })();
+    </script>
+  </body>
+</html>
